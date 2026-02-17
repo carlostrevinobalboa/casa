@@ -10,15 +10,18 @@
         <label for="pantry-product-name" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Producto
         </label>
-        <input
+        <select
           id="pantry-product-name"
           v-model="form.productName"
-          list="pantry-product-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="Ej: Leche"
           @change="onProductChange(form.productName)"
-        />
+        >
+          <option value="" disabled>Selecciona un producto</option>
+          <option v-for="product in catalogProducts" :key="product.id" :value="product.name">
+            {{ product.name }}
+          </option>
+        </select>
       </div>
 
       <div>
@@ -57,14 +60,17 @@
         <label for="pantry-unit" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Unidad
         </label>
-        <input
+        <select
           id="pantry-unit"
           v-model="form.unit"
-          list="pantry-unit-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="ud / kg / L"
-        />
+        >
+          <option value="" disabled>Selecciona unidad</option>
+          <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code">
+            {{ unit.code }} - {{ unit.label }}
+          </option>
+        </select>
       </div>
 
       <div>
@@ -83,33 +89,31 @@
         <label for="pantry-category" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Categoria
         </label>
-        <input
+        <select
           id="pantry-category"
           v-model="form.category"
-          list="pantry-category-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="Ej: LACTEOS"
-        />
+        >
+          <option value="" disabled>Selecciona categoria</option>
+          <option v-for="category in catalogCategories" :key="category.id" :value="category.name">
+            {{ category.name }}
+          </option>
+        </select>
       </div>
 
       <button
         type="submit"
-        class="self-end rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        :disabled="!canCreateItem"
+        class="self-end rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Anadir
       </button>
     </form>
 
-    <datalist id="pantry-product-options">
-      <option v-for="product in catalogProducts" :key="product.id" :value="product.name"></option>
-    </datalist>
-    <datalist id="pantry-unit-options">
-      <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code"></option>
-    </datalist>
-    <datalist id="pantry-category-options">
-      <option v-for="category in catalogCategories" :key="category.id" :value="category.name"></option>
-    </datalist>
+    <p v-if="!canCreateItem" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      Configura productos, unidades y categorias en Admin para poder anadir items de despensa.
+    </p>
 
     <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
       {{ errorMessage }}
@@ -178,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
@@ -210,6 +214,12 @@ const form = reactive<PantryItemRequest>({
 const householdId = () => session.activeHouseholdId;
 const defaultUnitCode = () => catalogUnits.value[0]?.code ?? "ud";
 const defaultCategoryName = () => catalogCategories.value[0]?.name ?? "GENERAL";
+const defaultProductName = () => catalogProducts.value[0]?.name ?? "";
+const canCreateItem = computed(() =>
+  catalogProducts.value.length > 0
+  && catalogUnits.value.length > 0
+  && catalogCategories.value.length > 0
+);
 
 const loadCatalog = async () => {
   const id = householdId();
@@ -231,6 +241,10 @@ const loadCatalog = async () => {
     }
     if (!catalogCategories.value.some((category) => category.name === form.category)) {
       form.category = defaultCategoryName();
+    }
+    if (!catalogProducts.value.some((product) => product.name === form.productName)) {
+      form.productName = defaultProductName();
+      onProductChange(form.productName);
     }
   } catch {
     catalogUnits.value = [];
@@ -267,14 +281,14 @@ const onProductChange = (productName: string) => {
 
 const createItem = async () => {
   const id = householdId();
-  if (!id) {
+  if (!id || !canCreateItem.value) {
     return;
   }
 
   try {
     onProductChange(form.productName);
     await api.post<PantryItem>(`/api/households/${id}/pantry-items`, form);
-    form.productName = "";
+    form.productName = defaultProductName();
     form.currentQuantity = 0;
     form.minimumQuantity = 0;
     form.unit = defaultUnitCode();

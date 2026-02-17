@@ -69,15 +69,18 @@
             <label :for="`ingredient-name-${index}`" class="mb-1 block text-xs text-slate-600">
               Producto
             </label>
-            <input
+            <select
               :id="`ingredient-name-${index}`"
               v-model="ingredient.productName"
-              list="recipe-product-options"
               required
               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              placeholder="Ej: Huevo"
               @change="onIngredientProductChange(ingredient)"
-            />
+            >
+              <option value="" disabled>Selecciona un producto</option>
+              <option v-for="product in catalogProducts" :key="product.id" :value="product.name">
+                {{ product.name }}
+              </option>
+            </select>
           </div>
 
           <div>
@@ -99,14 +102,17 @@
             <label :for="`ingredient-unit-${index}`" class="mb-1 block text-xs text-slate-600">
               Unidad
             </label>
-            <input
+            <select
               :id="`ingredient-unit-${index}`"
               v-model="ingredient.unit"
-              list="recipe-unit-options"
               required
               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              placeholder="UD"
-            />
+            >
+              <option value="" disabled>Selecciona unidad</option>
+              <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code">
+                {{ unit.code }} - {{ unit.label }}
+              </option>
+            </select>
           </div>
 
           <div class="self-end">
@@ -126,11 +132,16 @@
 
       <button
         type="submit"
-        class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        :disabled="!canCreateRecipe"
+        class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Guardar receta
       </button>
     </form>
+
+    <p v-if="!canCreateRecipe" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      Configura al menos productos y unidades en Admin para poder crear recetas.
+    </p>
 
     <section class="space-y-3">
       <h3 class="text-sm font-medium text-slate-800">Recetas guardadas</h3>
@@ -174,13 +185,6 @@
       <p v-if="recipes.length === 0" class="text-sm text-slate-500">No hay recetas creadas todavia.</p>
     </section>
 
-    <datalist id="recipe-product-options">
-      <option v-for="product in catalogProducts" :key="product.id" :value="product.name"></option>
-    </datalist>
-    <datalist id="recipe-unit-options">
-      <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code"></option>
-    </datalist>
-
     <section
       v-if="lastExecution"
       class="rounded-xl border border-slate-200 bg-slate-50 p-4"
@@ -201,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
@@ -223,9 +227,14 @@ const errorMessage = ref("");
 const lastExecution = ref<RecipeExecutionResult | null>(null);
 
 const defaultUnitCode = () => catalogUnits.value[0]?.code ?? "ud";
+const defaultProductName = () => catalogProducts.value[0]?.name ?? "";
+const canCreateRecipe = computed(() =>
+  catalogProducts.value.length > 0
+  && catalogUnits.value.length > 0
+);
 
 const createEmptyIngredient = (): RecipeIngredientRequest => ({
-  productName: "",
+  productName: defaultProductName(),
   requiredQuantity: 1,
   unit: defaultUnitCode()
 });
@@ -251,6 +260,7 @@ const loadCatalog = async () => {
     const catalog = await fetchHouseholdCatalog(id);
     catalogUnits.value = catalog.units.filter((unit) => unit.active);
     catalogProducts.value = catalog.products.filter((product) => product.active);
+    ensureIngredientSelections();
   } catch {
     catalogUnits.value = [];
     catalogProducts.value = [];
@@ -298,9 +308,24 @@ const onIngredientProductChange = (ingredient: RecipeIngredientRequest) => {
   }
 };
 
+const ensureIngredientSelections = () => {
+  const fallbackProduct = defaultProductName();
+  const fallbackUnit = defaultUnitCode();
+
+  for (const ingredient of form.ingredients) {
+    if (!catalogProducts.value.some((product) => product.name === ingredient.productName)) {
+      ingredient.productName = fallbackProduct;
+    }
+    if (!catalogUnits.value.some((unit) => unit.code === ingredient.unit)) {
+      ingredient.unit = fallbackUnit;
+    }
+    onIngredientProductChange(ingredient);
+  }
+};
+
 const createRecipe = async () => {
   const id = householdId();
-  if (!id) {
+  if (!id || !canCreateRecipe.value) {
     return;
   }
 

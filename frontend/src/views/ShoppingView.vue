@@ -12,15 +12,18 @@
         <label for="shopping-product-name" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Producto
         </label>
-        <input
+        <select
           id="shopping-product-name"
           v-model="form.productName"
-          list="shopping-product-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="Ej: Leche"
           @change="onProductChange(form.productName)"
-        />
+        >
+          <option value="" disabled>Selecciona un producto</option>
+          <option v-for="product in catalogProducts" :key="product.id" :value="product.name">
+            {{ product.name }}
+          </option>
+        </select>
       </div>
 
       <div>
@@ -42,47 +45,48 @@
         <label for="shopping-unit" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Unidad
         </label>
-        <input
+        <select
           id="shopping-unit"
           v-model="form.unit"
-          list="shopping-unit-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="ud"
-        />
+        >
+          <option value="" disabled>Selecciona unidad</option>
+          <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code">
+            {{ unit.code }} - {{ unit.label }}
+          </option>
+        </select>
       </div>
 
       <div>
         <label for="shopping-category" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Categoria
         </label>
-        <input
+        <select
           id="shopping-category"
           v-model="form.category"
-          list="shopping-category-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="GENERAL"
-        />
+        >
+          <option value="" disabled>Selecciona categoria</option>
+          <option v-for="category in catalogCategories" :key="category.id" :value="category.name">
+            {{ category.name }}
+          </option>
+        </select>
       </div>
 
       <button
         type="submit"
-        class="self-end rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        :disabled="!canCreateShoppingItem"
+        class="self-end rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Anadir a compra
       </button>
     </form>
 
-    <datalist id="shopping-product-options">
-      <option v-for="product in catalogProducts" :key="product.id" :value="product.name"></option>
-    </datalist>
-    <datalist id="shopping-unit-options">
-      <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code"></option>
-    </datalist>
-    <datalist id="shopping-category-options">
-      <option v-for="category in catalogCategories" :key="category.id" :value="category.name"></option>
-    </datalist>
+    <p v-if="!canCreateShoppingItem" class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      Configura productos, unidades y categorias en Admin para poder anadir items de compra.
+    </p>
 
     <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ errorMessage }}</p>
 
@@ -141,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
@@ -171,6 +175,12 @@ const form = reactive<ShoppingListItemRequest>({
 const householdId = () => session.activeHouseholdId;
 const defaultUnitCode = () => catalogUnits.value[0]?.code ?? "ud";
 const defaultCategoryName = () => catalogCategories.value[0]?.name ?? "GENERAL";
+const defaultProductName = () => catalogProducts.value[0]?.name ?? "";
+const canCreateShoppingItem = computed(() =>
+  catalogProducts.value.length > 0
+  && catalogUnits.value.length > 0
+  && catalogCategories.value.length > 0
+);
 
 const sourceLabel = (source: ShoppingListItem["sourceType"]) => {
   if (source === "MANUAL") return "Manual";
@@ -198,6 +208,10 @@ const loadCatalog = async () => {
     }
     if (!catalogCategories.value.some((category) => category.name === form.category)) {
       form.category = defaultCategoryName();
+    }
+    if (!catalogProducts.value.some((product) => product.name === form.productName)) {
+      form.productName = defaultProductName();
+      onProductChange(form.productName);
     }
   } catch {
     catalogUnits.value = [];
@@ -233,13 +247,13 @@ const onProductChange = (productName: string) => {
 
 const addManualItem = async () => {
   const id = householdId();
-  if (!id) return;
+  if (!id || !canCreateShoppingItem.value) return;
 
   errorMessage.value = "";
   try {
     onProductChange(form.productName);
     await api.post(`/api/households/${id}/shopping-list-items`, form);
-    form.productName = "";
+    form.productName = defaultProductName();
     form.quantity = 1;
     form.unit = defaultUnitCode();
     form.category = defaultCategoryName();
