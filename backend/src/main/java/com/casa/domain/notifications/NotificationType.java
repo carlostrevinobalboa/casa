@@ -1,0 +1,13 @@
+package com.casa.domain.notifications;
+
+public enum NotificationType {
+    PANTRY_MINIMUM_LOW,
+    PANTRY_EXPIRING_SOON,
+    PET_FOOD_LOW,
+    PET_CARE_DUE,
+    TASK_FORGOTTEN,
+    LOW_PHYSICAL_ACTIVITY,
+    PENDING_SHOPPING_REMINDER,
+    RECIPE_STEP_TIMER,
+    CALENDAR_EVENT_REMINDER
+}
