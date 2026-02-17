@@ -90,6 +90,7 @@ const items = [
   { to: "/despensa", label: "Despensa" },
   { to: "/recetas", label: "Recetas" },
   { to: "/compra", label: "Compra" },
+  { to: "/admin/catalogo", label: "Admin" },
   { to: "/mascotas", label: "Mascotas" },
   { to: "/actividad", label: "Actividad" },
   { to: "/calendario", label: "Calendario" },

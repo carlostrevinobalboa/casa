@@ -11,7 +11,8 @@ const routes: RouteRecordRaw[] = [
   { path: "/mascotas", name: "mascotas", component: () => import("../views/PetsView.vue"), meta: { requiresAuth: true } },
   { path: "/actividad", name: "actividad", component: () => import("../views/ActivitiesView.vue"), meta: { requiresAuth: true } },
   { path: "/calendario", name: "calendario", component: () => import("../views/CalendarView.vue"), meta: { requiresAuth: true } },
-  { path: "/notificaciones", name: "notificaciones", component: () => import("../views/NotificationsView.vue"), meta: { requiresAuth: true } }
+  { path: "/notificaciones", name: "notificaciones", component: () => import("../views/NotificationsView.vue"), meta: { requiresAuth: true } },
+  { path: "/admin/catalogo", name: "admin-catalogo", component: () => import("../views/AdminCatalogView.vue"), meta: { requiresAuth: true } }
 ];
 
 const router = createRouter({

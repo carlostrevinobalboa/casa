@@ -13,9 +13,11 @@
         <input
           id="pantry-product-name"
           v-model="form.productName"
+          list="pantry-product-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="Ej: Leche"
+          @change="onProductChange(form.productName)"
         />
       </div>
 
@@ -58,6 +60,7 @@
         <input
           id="pantry-unit"
           v-model="form.unit"
+          list="pantry-unit-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="ud / kg / L"
@@ -83,6 +86,7 @@
         <input
           id="pantry-category"
           v-model="form.category"
+          list="pantry-category-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="Ej: LACTEOS"
@@ -96,6 +100,16 @@
         Anadir
       </button>
     </form>
+
+    <datalist id="pantry-product-options">
+      <option v-for="product in catalogProducts" :key="product.id" :value="product.name"></option>
+    </datalist>
+    <datalist id="pantry-unit-options">
+      <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code"></option>
+    </datalist>
+    <datalist id="pantry-category-options">
+      <option v-for="category in catalogCategories" :key="category.id" :value="category.name"></option>
+    </datalist>
 
     <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
       {{ errorMessage }}
@@ -166,12 +180,22 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
+import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
-import type { PantryItem, PantryItemRequest } from "../types";
+import type {
+  CatalogCategory,
+  CatalogProduct,
+  CatalogUnit,
+  PantryItem,
+  PantryItemRequest
+} from "../types";
 
 const session = useSessionStore();
 
 const items = ref<PantryItem[]>([]);
+const catalogUnits = ref<CatalogUnit[]>([]);
+const catalogCategories = ref<CatalogCategory[]>([]);
+const catalogProducts = ref<CatalogProduct[]>([]);
 const errorMessage = ref("");
 
 const form = reactive<PantryItemRequest>({
@@ -184,6 +208,36 @@ const form = reactive<PantryItemRequest>({
 });
 
 const householdId = () => session.activeHouseholdId;
+const defaultUnitCode = () => catalogUnits.value[0]?.code ?? "ud";
+const defaultCategoryName = () => catalogCategories.value[0]?.name ?? "GENERAL";
+
+const loadCatalog = async () => {
+  const id = householdId();
+  if (!id) {
+    catalogUnits.value = [];
+    catalogCategories.value = [];
+    catalogProducts.value = [];
+    return;
+  }
+
+  try {
+    const catalog = await fetchHouseholdCatalog(id);
+    catalogUnits.value = catalog.units.filter((unit) => unit.active);
+    catalogCategories.value = catalog.categories.filter((category) => category.active);
+    catalogProducts.value = catalog.products.filter((product) => product.active);
+
+    if (!catalogUnits.value.some((unit) => unit.code === form.unit)) {
+      form.unit = defaultUnitCode();
+    }
+    if (!catalogCategories.value.some((category) => category.name === form.category)) {
+      form.category = defaultCategoryName();
+    }
+  } catch {
+    catalogUnits.value = [];
+    catalogCategories.value = [];
+    catalogProducts.value = [];
+  }
+};
 
 const load = async () => {
   errorMessage.value = "";
@@ -197,6 +251,20 @@ const load = async () => {
   items.value = data;
 };
 
+const onProductChange = (productName: string) => {
+  const product = findProductInCatalog(catalogProducts.value, productName);
+  if (!product) {
+    return;
+  }
+
+  if (product.defaultUnitCode) {
+    form.unit = product.defaultUnitCode;
+  }
+  if (product.defaultCategoryName) {
+    form.category = product.defaultCategoryName;
+  }
+};
+
 const createItem = async () => {
   const id = householdId();
   if (!id) {
@@ -204,13 +272,14 @@ const createItem = async () => {
   }
 
   try {
+    onProductChange(form.productName);
     await api.post<PantryItem>(`/api/households/${id}/pantry-items`, form);
     form.productName = "";
     form.currentQuantity = 0;
     form.minimumQuantity = 0;
-    form.unit = "ud";
+    form.unit = defaultUnitCode();
     form.expirationDate = null;
-    form.category = "GENERAL";
+    form.category = defaultCategoryName();
     await load();
   } catch {
     errorMessage.value = "No se pudo crear el producto.";
@@ -249,7 +318,7 @@ const removeItem = async (itemId: string) => {
 watch(
   () => session.activeHouseholdId,
   () => {
-    void load();
+    void Promise.all([loadCatalog(), load()]);
   },
   { immediate: true }
 );

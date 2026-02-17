@@ -3,7 +3,7 @@
     <div>
       <h2 class="text-xl font-semibold">Recetas</h2>
       <p class="mt-1 text-sm text-slate-600">
-        Crea recetas, asocia ingredientes y ejecútalas para descontar despensa y enviar faltantes a compra.
+        Crea recetas, asocia ingredientes y ejecutalas para descontar despensa y enviar faltantes a compra.
       </p>
     </div>
 
@@ -24,13 +24,13 @@
 
         <div>
           <label for="recipe-description" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
-            Descripción
+            Descripcion
           </label>
           <input
             id="recipe-description"
             v-model="form.description"
             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Plato rápido para cena"
+            placeholder="Plato rapido para cena"
           />
         </div>
       </div>
@@ -44,7 +44,7 @@
           v-model="form.steps"
           rows="3"
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          placeholder="Describe los pasos de preparación"
+          placeholder="Describe los pasos de preparacion"
         ></textarea>
       </div>
 
@@ -56,7 +56,7 @@
             class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
             @click="addIngredient"
           >
-            Añadir ingrediente
+            Anadir ingrediente
           </button>
         </div>
 
@@ -72,9 +72,11 @@
             <input
               :id="`ingredient-name-${index}`"
               v-model="ingredient.productName"
+              list="recipe-product-options"
               required
               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
               placeholder="Ej: Huevo"
+              @change="onIngredientProductChange(ingredient)"
             />
           </div>
 
@@ -100,9 +102,10 @@
             <input
               :id="`ingredient-unit-${index}`"
               v-model="ingredient.unit"
+              list="recipe-unit-options"
               required
               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              placeholder="ud"
+              placeholder="UD"
             />
           </div>
 
@@ -168,15 +171,22 @@
         </ul>
       </article>
 
-      <p v-if="recipes.length === 0" class="text-sm text-slate-500">No hay recetas creadas todavía.</p>
+      <p v-if="recipes.length === 0" class="text-sm text-slate-500">No hay recetas creadas todavia.</p>
     </section>
+
+    <datalist id="recipe-product-options">
+      <option v-for="product in catalogProducts" :key="product.id" :value="product.name"></option>
+    </datalist>
+    <datalist id="recipe-unit-options">
+      <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code"></option>
+    </datalist>
 
     <section
       v-if="lastExecution"
       class="rounded-xl border border-slate-200 bg-slate-50 p-4"
     >
       <h3 class="text-sm font-medium text-slate-900">
-        Última ejecución: {{ lastExecution.recipeName }}
+        Ultima ejecucion: {{ lastExecution.recipeName }}
       </h3>
       <p class="mt-1 text-sm text-slate-600">
         Faltantes enviados a compra: {{ lastExecution.shortagesCount }}
@@ -193,8 +203,11 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
+import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
 import type {
+  CatalogProduct,
+  CatalogUnit,
   Recipe,
   RecipeExecutionResult,
   RecipeIngredientRequest,
@@ -204,23 +217,45 @@ import type {
 const session = useSessionStore();
 
 const recipes = ref<Recipe[]>([]);
+const catalogUnits = ref<CatalogUnit[]>([]);
+const catalogProducts = ref<CatalogProduct[]>([]);
 const errorMessage = ref("");
 const lastExecution = ref<RecipeExecutionResult | null>(null);
+
+const defaultUnitCode = () => catalogUnits.value[0]?.code ?? "ud";
+
+const createEmptyIngredient = (): RecipeIngredientRequest => ({
+  productName: "",
+  requiredQuantity: 1,
+  unit: defaultUnitCode()
+});
 
 const form = reactive<RecipeRequest>({
   name: "",
   description: "",
   steps: "",
-  ingredients: [
-    {
-      productName: "",
-      requiredQuantity: 1,
-      unit: "ud"
-    }
-  ]
+  ingredients: [createEmptyIngredient()]
 });
 
 const householdId = () => session.activeHouseholdId;
+
+const loadCatalog = async () => {
+  const id = householdId();
+  if (!id) {
+    catalogUnits.value = [];
+    catalogProducts.value = [];
+    return;
+  }
+
+  try {
+    const catalog = await fetchHouseholdCatalog(id);
+    catalogUnits.value = catalog.units.filter((unit) => unit.active);
+    catalogProducts.value = catalog.products.filter((product) => product.active);
+  } catch {
+    catalogUnits.value = [];
+    catalogProducts.value = [];
+  }
+};
 
 const load = async () => {
   errorMessage.value = "";
@@ -235,11 +270,7 @@ const load = async () => {
 };
 
 const addIngredient = () => {
-  form.ingredients.push({
-    productName: "",
-    requiredQuantity: 1,
-    unit: "ud"
-  });
+  form.ingredients.push(createEmptyIngredient());
 };
 
 const removeIngredient = (index: number) => {
@@ -253,13 +284,18 @@ const resetForm = () => {
   form.name = "";
   form.description = "";
   form.steps = "";
-  form.ingredients = [
-    {
-      productName: "",
-      requiredQuantity: 1,
-      unit: "ud"
-    }
-  ] as RecipeIngredientRequest[];
+  form.ingredients = [createEmptyIngredient()] as RecipeIngredientRequest[];
+};
+
+const onIngredientProductChange = (ingredient: RecipeIngredientRequest) => {
+  const product = findProductInCatalog(catalogProducts.value, ingredient.productName);
+  if (!product) {
+    return;
+  }
+
+  if (product.defaultUnitCode) {
+    ingredient.unit = product.defaultUnitCode;
+  }
 };
 
 const createRecipe = async () => {
@@ -269,6 +305,7 @@ const createRecipe = async () => {
   }
 
   try {
+    form.ingredients.forEach((ingredient) => onIngredientProductChange(ingredient));
     await api.post(`/api/households/${id}/recipes`, form);
     resetForm();
     await load();
@@ -300,7 +337,7 @@ const executeRecipe = async (recipeId: string) => {
 watch(
   () => session.activeHouseholdId,
   () => {
-    void load();
+    void Promise.all([loadCatalog(), load()]);
   },
   { immediate: true }
 );

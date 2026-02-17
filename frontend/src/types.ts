@@ -115,3 +115,42 @@ export interface ShoppingListItemRequest {
   unit: string;
   category: string;
 }
+
+export interface CatalogUnit {
+  id: string;
+  code: string;
+  label: string;
+  active: boolean;
+}
+
+export interface CatalogUnitRequest {
+  code: string;
+  label: string;
+  active: boolean;
+}
+
+export interface CatalogCategory {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
+export interface CatalogCategoryRequest {
+  name: string;
+  active: boolean;
+}
+
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  defaultUnitCode: string | null;
+  defaultCategoryName: string | null;
+  active: boolean;
+}
+
+export interface CatalogProductRequest {
+  name: string;
+  defaultUnitCode: string | null;
+  defaultCategoryName: string | null;
+  active: boolean;
+}

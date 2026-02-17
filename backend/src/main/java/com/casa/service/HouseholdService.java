@@ -103,6 +103,16 @@ public class HouseholdService {
     }
 
     @Transactional(readOnly = true)
+    public void requireAdminOrOwner(UUID userId, UUID householdId) {
+        HouseholdMember member = householdMemberRepository.findByHouseholdIdAndUserId(householdId, userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "No perteneces a este hogar"));
+
+        if (member.getRole() != HouseholdRole.OWNER && member.getRole() != HouseholdRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permisos de administracion");
+        }
+    }
+
+    @Transactional(readOnly = true)
     public List<UUID> householdUserIds(UUID householdId) {
         return householdMemberRepository.findByHouseholdId(householdId)
             .stream()

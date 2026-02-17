@@ -3,7 +3,7 @@
     <div>
       <h2 class="text-xl font-semibold">Compra inteligente</h2>
       <p class="mt-1 text-sm text-slate-600">
-        Productos faltantes desde recetas y despensa, más altas manuales.
+        Productos faltantes desde recetas y despensa, mas altas manuales.
       </p>
     </div>
 
@@ -15,9 +15,11 @@
         <input
           id="shopping-product-name"
           v-model="form.productName"
+          list="shopping-product-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="Ej: Leche"
+          @change="onProductChange(form.productName)"
         />
       </div>
 
@@ -43,6 +45,7 @@
         <input
           id="shopping-unit"
           v-model="form.unit"
+          list="shopping-unit-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="ud"
@@ -51,11 +54,12 @@
 
       <div>
         <label for="shopping-category" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
-          Categoría
+          Categoria
         </label>
         <input
           id="shopping-category"
           v-model="form.category"
+          list="shopping-category-options"
           required
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           placeholder="GENERAL"
@@ -66,9 +70,19 @@
         type="submit"
         class="self-end rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
       >
-        Añadir a compra
+        Anadir a compra
       </button>
     </form>
+
+    <datalist id="shopping-product-options">
+      <option v-for="product in catalogProducts" :key="product.id" :value="product.name"></option>
+    </datalist>
+    <datalist id="shopping-unit-options">
+      <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code"></option>
+    </datalist>
+    <datalist id="shopping-category-options">
+      <option v-for="category in catalogCategories" :key="category.id" :value="category.name"></option>
+    </datalist>
 
     <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ errorMessage }}</p>
 
@@ -78,7 +92,7 @@
           <tr class="border-b border-slate-200 text-left text-slate-500">
             <th class="px-3 py-2">Producto</th>
             <th class="px-3 py-2">Cantidad</th>
-            <th class="px-3 py-2">Categoría</th>
+            <th class="px-3 py-2">Categoria</th>
             <th class="px-3 py-2">Origen</th>
             <th class="px-3 py-2">Estado</th>
             <th class="px-3 py-2">Acciones</th>
@@ -129,12 +143,22 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
+import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
-import type { ShoppingListItem, ShoppingListItemRequest } from "../types";
+import type {
+  CatalogCategory,
+  CatalogProduct,
+  CatalogUnit,
+  ShoppingListItem,
+  ShoppingListItemRequest
+} from "../types";
 
 const session = useSessionStore();
 
 const items = ref<ShoppingListItem[]>([]);
+const catalogUnits = ref<CatalogUnit[]>([]);
+const catalogCategories = ref<CatalogCategory[]>([]);
+const catalogProducts = ref<CatalogProduct[]>([]);
 const errorMessage = ref("");
 
 const form = reactive<ShoppingListItemRequest>({
@@ -145,11 +169,41 @@ const form = reactive<ShoppingListItemRequest>({
 });
 
 const householdId = () => session.activeHouseholdId;
+const defaultUnitCode = () => catalogUnits.value[0]?.code ?? "ud";
+const defaultCategoryName = () => catalogCategories.value[0]?.name ?? "GENERAL";
 
 const sourceLabel = (source: ShoppingListItem["sourceType"]) => {
   if (source === "MANUAL") return "Manual";
   if (source === "RECIPE_SHORTAGE") return "Faltante receta";
-  return "Stock mínimo";
+  return "Stock minimo";
+};
+
+const loadCatalog = async () => {
+  const id = householdId();
+  if (!id) {
+    catalogUnits.value = [];
+    catalogCategories.value = [];
+    catalogProducts.value = [];
+    return;
+  }
+
+  try {
+    const catalog = await fetchHouseholdCatalog(id);
+    catalogUnits.value = catalog.units.filter((unit) => unit.active);
+    catalogCategories.value = catalog.categories.filter((category) => category.active);
+    catalogProducts.value = catalog.products.filter((product) => product.active);
+
+    if (!catalogUnits.value.some((unit) => unit.code === form.unit)) {
+      form.unit = defaultUnitCode();
+    }
+    if (!catalogCategories.value.some((category) => category.name === form.category)) {
+      form.category = defaultCategoryName();
+    }
+  } catch {
+    catalogUnits.value = [];
+    catalogCategories.value = [];
+    catalogProducts.value = [];
+  }
 };
 
 const load = async () => {
@@ -163,20 +217,35 @@ const load = async () => {
   items.value = data;
 };
 
+const onProductChange = (productName: string) => {
+  const product = findProductInCatalog(catalogProducts.value, productName);
+  if (!product) {
+    return;
+  }
+
+  if (product.defaultUnitCode) {
+    form.unit = product.defaultUnitCode;
+  }
+  if (product.defaultCategoryName) {
+    form.category = product.defaultCategoryName;
+  }
+};
+
 const addManualItem = async () => {
   const id = householdId();
   if (!id) return;
 
   errorMessage.value = "";
   try {
+    onProductChange(form.productName);
     await api.post(`/api/households/${id}/shopping-list-items`, form);
     form.productName = "";
     form.quantity = 1;
-    form.unit = "ud";
-    form.category = "GENERAL";
+    form.unit = defaultUnitCode();
+    form.category = defaultCategoryName();
     await load();
   } catch {
-    errorMessage.value = "No se pudo añadir el producto a compra.";
+    errorMessage.value = "No se pudo anadir el producto a compra.";
   }
 };
 
@@ -192,7 +261,7 @@ const setPurchased = async (itemId: string, purchased: boolean) => {
 watch(
   () => session.activeHouseholdId,
   () => {
-    void load();
+    void Promise.all([loadCatalog(), load()]);
   },
   { immediate: true }
 );
