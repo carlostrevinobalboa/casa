@@ -7,28 +7,34 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.casa.api.dto.shopping.ShoppingPurchaseResponse;
 import com.casa.api.dto.shopping.ShoppingListItemRequest;
 import com.casa.api.dto.shopping.ShoppingListItemResponse;
 import com.casa.domain.household.Household;
 import com.casa.domain.pantry.PantryItem;
 import com.casa.domain.shopping.ShoppingItemSourceType;
 import com.casa.domain.shopping.ShoppingListItem;
+import com.casa.domain.shopping.ShoppingPurchase;
 import com.casa.repository.HouseholdRepository;
 import com.casa.repository.ShoppingListItemRepository;
+import com.casa.repository.ShoppingPurchaseRepository;
 
 @Service
 public class ShoppingListService {
 
     private final ShoppingListItemRepository shoppingListItemRepository;
+    private final ShoppingPurchaseRepository shoppingPurchaseRepository;
     private final HouseholdRepository householdRepository;
     private final HouseholdService householdService;
 
     public ShoppingListService(
         ShoppingListItemRepository shoppingListItemRepository,
+        ShoppingPurchaseRepository shoppingPurchaseRepository,
         HouseholdRepository householdRepository,
         HouseholdService householdService
     ) {
         this.shoppingListItemRepository = shoppingListItemRepository;
+        this.shoppingPurchaseRepository = shoppingPurchaseRepository;
         this.householdRepository = householdRepository;
         this.householdService = householdService;
     }
@@ -58,6 +64,16 @@ public class ShoppingListService {
         );
 
         return toResponse(item);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ShoppingPurchaseResponse> listPurchaseHistory(UUID userId, UUID householdId) {
+        householdService.requireMembership(userId, householdId);
+
+        return shoppingPurchaseRepository.findTop100ByHouseholdIdOrderByPurchasedAtDesc(householdId)
+            .stream()
+            .map(this::toPurchaseResponse)
+            .toList();
     }
 
     @Transactional
@@ -115,17 +131,57 @@ public class ShoppingListService {
     }
 
     @Transactional
-    public ShoppingListItemResponse markPurchased(UUID userId, UUID householdId, UUID itemId, boolean purchased) {
+    public ShoppingListItemResponse markPurchased(
+        UUID userId,
+        UUID householdId,
+        UUID itemId,
+        boolean purchased,
+        Double totalPrice
+    ) {
         householdService.requireMembership(userId, householdId);
 
         ShoppingListItem item = shoppingListItemRepository.findByIdAndHouseholdId(itemId, householdId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item de compra no encontrado"));
 
+        if (totalPrice != null && totalPrice < 0.0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El precio total no puede ser negativo");
+        }
+
+        boolean wasPurchased = item.isPurchased();
+
         item.setPurchased(purchased);
-        item.setPurchasedAt(purchased ? OffsetDateTime.now() : null);
+        OffsetDateTime purchaseTimestamp = purchased ? OffsetDateTime.now() : null;
+        item.setPurchasedAt(purchaseTimestamp);
         shoppingListItemRepository.save(item);
 
+        if (!wasPurchased && purchased && totalPrice != null) {
+            savePurchaseHistory(item, userId, totalPrice, purchaseTimestamp);
+        } else if (wasPurchased && !purchased) {
+            shoppingPurchaseRepository.findTopByHouseholdIdAndShoppingListItemIdOrderByPurchasedAtDesc(householdId, itemId)
+                .ifPresent(shoppingPurchaseRepository::delete);
+        }
+
         return toResponse(item);
+    }
+
+    private void savePurchaseHistory(
+        ShoppingListItem item,
+        UUID purchasedByUserId,
+        double totalPrice,
+        OffsetDateTime purchasedAt
+    ) {
+        ShoppingPurchase purchase = new ShoppingPurchase();
+        purchase.setHousehold(item.getHousehold());
+        purchase.setShoppingListItemId(item.getId());
+        purchase.setProductName(item.getProductName());
+        purchase.setQuantity(item.getQuantity());
+        purchase.setUnit(item.getUnit());
+        purchase.setCategory(item.getCategory());
+        purchase.setTotalPrice(totalPrice);
+        purchase.setUnitPrice(item.getQuantity() <= 0.0 ? null : totalPrice / item.getQuantity());
+        purchase.setPurchasedByUserId(purchasedByUserId);
+        purchase.setPurchasedAt(purchasedAt == null ? OffsetDateTime.now() : purchasedAt);
+        shoppingPurchaseRepository.save(purchase);
     }
 
     private ShoppingListItem upsertPendingItem(
@@ -182,6 +238,21 @@ public class ShoppingListService {
             item.getSourceType(),
             item.isPurchased(),
             item.getPurchasedAt()
+        );
+    }
+
+    private ShoppingPurchaseResponse toPurchaseResponse(ShoppingPurchase purchase) {
+        return new ShoppingPurchaseResponse(
+            purchase.getId(),
+            purchase.getShoppingListItemId(),
+            purchase.getProductName(),
+            purchase.getQuantity(),
+            purchase.getUnit(),
+            purchase.getCategory(),
+            purchase.getTotalPrice(),
+            purchase.getUnitPrice(),
+            purchase.getPurchasedByUserId(),
+            purchase.getPurchasedAt()
         );
     }
 }

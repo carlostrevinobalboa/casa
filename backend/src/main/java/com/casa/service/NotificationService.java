@@ -4,9 +4,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.casa.api.dto.notification.NotificationRealtimeEvent;
 import com.casa.api.dto.notification.NotificationResponse;
 import com.casa.domain.household.Household;
 import com.casa.domain.identity.UserAccount;
@@ -23,17 +25,20 @@ public class NotificationService {
     private final HouseholdRepository householdRepository;
     private final UserAccountRepository userAccountRepository;
     private final HouseholdService householdService;
+    private final SimpMessagingTemplate simpMessagingTemplate;
 
     public NotificationService(
         NotificationRepository notificationRepository,
         HouseholdRepository householdRepository,
         UserAccountRepository userAccountRepository,
-        HouseholdService householdService
+        HouseholdService householdService,
+        SimpMessagingTemplate simpMessagingTemplate
     ) {
         this.notificationRepository = notificationRepository;
         this.householdRepository = householdRepository;
         this.userAccountRepository = userAccountRepository;
         this.householdService = householdService;
+        this.simpMessagingTemplate = simpMessagingTemplate;
     }
 
     @Transactional
@@ -74,6 +79,7 @@ public class NotificationService {
         notification.setSourceEntityId(sourceEntityId);
 
         notificationRepository.save(notification);
+        publishRealtimeEvent(householdId, recipientUserId, notification);
     }
 
     @Transactional(readOnly = true)
@@ -82,14 +88,7 @@ public class NotificationService {
 
         return notificationRepository.findTop30ByHouseholdIdAndRecipientIdOrderByScheduledForDesc(householdId, userId)
             .stream()
-            .map(notification -> new NotificationResponse(
-                notification.getId(),
-                notification.getType(),
-                notification.getTitle(),
-                notification.getBody(),
-                notification.getScheduledFor(),
-                notification.getReadAt()
-            ))
+            .map(this::toResponse)
             .toList();
     }
 
@@ -109,6 +108,36 @@ public class NotificationService {
         if (notification.getReadAt() == null) {
             notification.setReadAt(OffsetDateTime.now());
             notificationRepository.save(notification);
+        }
+    }
+
+    private NotificationResponse toResponse(Notification notification) {
+        return new NotificationResponse(
+            notification.getId(),
+            notification.getType(),
+            notification.getTitle(),
+            notification.getBody(),
+            notification.getScheduledFor(),
+            notification.getReadAt()
+        );
+    }
+
+    private void publishRealtimeEvent(UUID householdId, UUID recipientUserId, Notification notification) {
+        try {
+            long unreadCount = notificationRepository.countByHouseholdIdAndRecipientIdAndReadAtIsNull(householdId, recipientUserId);
+            NotificationRealtimeEvent event = new NotificationRealtimeEvent(
+                householdId,
+                unreadCount,
+                toResponse(notification)
+            );
+
+            simpMessagingTemplate.convertAndSendToUser(
+                recipientUserId.toString(),
+                "/queue/notifications",
+                event
+            );
+        } catch (RuntimeException ignored) {
+            // La notificacion persistida no debe fallar por un problema transitorio del canal realtime.
         }
     }
 }

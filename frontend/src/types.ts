@@ -56,6 +56,12 @@ export interface UserNotification {
   readAt: string | null;
 }
 
+export interface NotificationRealtimeEvent {
+  householdId: string;
+  unreadCount: number;
+  notification: UserNotification;
+}
+
 export interface RecipeIngredient {
   id: string;
   productName: string;
@@ -114,6 +120,19 @@ export interface ShoppingListItemRequest {
   quantity: number;
   unit: string;
   category: string;
+}
+
+export interface ShoppingPurchase {
+  id: string;
+  shoppingListItemId: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  category: string;
+  totalPrice: number;
+  unitPrice: number | null;
+  purchasedByUserId: string;
+  purchasedAt: string;
 }
 
 export interface CatalogUnit {

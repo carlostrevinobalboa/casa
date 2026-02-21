@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.casa.api.dto.shopping.ShoppingPurchaseRequest;
+import com.casa.api.dto.shopping.ShoppingPurchaseResponse;
 import com.casa.api.dto.shopping.ShoppingListItemRequest;
 import com.casa.api.dto.shopping.ShoppingListItemResponse;
 import com.casa.security.AppUserPrincipal;
@@ -32,6 +34,11 @@ public class ShoppingListController {
         return shoppingListService.list(currentUserId(authentication), householdId);
     }
 
+    @GetMapping("/history")
+    public List<ShoppingPurchaseResponse> history(Authentication authentication, @PathVariable UUID householdId) {
+        return shoppingListService.listPurchaseHistory(currentUserId(authentication), householdId);
+    }
+
     @PostMapping
     public ShoppingListItemResponse addManual(
         Authentication authentication,
@@ -45,9 +52,11 @@ public class ShoppingListController {
     public ShoppingListItemResponse purchase(
         Authentication authentication,
         @PathVariable UUID householdId,
-        @PathVariable UUID itemId
+        @PathVariable UUID itemId,
+        @RequestBody(required = false) @Valid ShoppingPurchaseRequest request
     ) {
-        return shoppingListService.markPurchased(currentUserId(authentication), householdId, itemId, true);
+        Double totalPrice = request == null ? null : request.totalPrice();
+        return shoppingListService.markPurchased(currentUserId(authentication), householdId, itemId, true, totalPrice);
     }
 
     @PostMapping("/{itemId}/unpurchase")
@@ -56,7 +65,7 @@ public class ShoppingListController {
         @PathVariable UUID householdId,
         @PathVariable UUID itemId
     ) {
-        return shoppingListService.markPurchased(currentUserId(authentication), householdId, itemId, false);
+        return shoppingListService.markPurchased(currentUserId(authentication), householdId, itemId, false, null);
     }
 
     private UUID currentUserId(Authentication authentication) {

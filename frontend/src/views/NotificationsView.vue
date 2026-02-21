@@ -5,7 +5,15 @@
         <h2 class="text-xl font-semibold">Notificaciones</h2>
         <p class="mt-1 text-sm text-slate-600">Alertas asignadas al usuario actual.</p>
       </div>
-      <p class="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">No leidas: {{ unreadCount }}</p>
+      <div class="flex items-center gap-2">
+        <p class="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">No leidas: {{ unreadCount }}</p>
+        <p
+          class="rounded-lg px-3 py-2 text-xs"
+          :class="socketConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+        >
+          {{ socketConnected ? "Tiempo real activo" : "Tiempo real reconectando" }}
+        </p>
+      </div>
     </div>
 
     <ul v-if="notifications.length" class="space-y-2">
@@ -18,7 +26,7 @@
           <div>
             <p class="font-medium text-slate-900">{{ notification.title }}</p>
             <p class="text-sm text-slate-600">{{ notification.body }}</p>
-            <p class="mt-1 text-xs text-slate-500">{{ notification.scheduledFor }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ formatDateTime(notification.scheduledFor) }}</p>
           </div>
 
           <button
@@ -40,15 +48,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../lib/api";
+import { connectNotificationSocket } from "../lib/notificationSocket";
 import { useSessionStore } from "../stores/session";
-import type { UserNotification } from "../types";
+import type { NotificationRealtimeEvent, UserNotification } from "../types";
 
 const session = useSessionStore();
 
 const notifications = ref<UserNotification[]>([]);
 const unreadCount = ref(0);
+const socketConnected = ref(false);
+
+let disconnectSocket: (() => void) | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let unmounted = false;
 
 const load = async () => {
   const householdId = session.activeHouseholdId;
@@ -77,11 +91,86 @@ const markRead = async (notificationId: string) => {
   await load();
 };
 
+const handleRealtimeEvent = (event: NotificationRealtimeEvent) => {
+  if (event.householdId !== session.activeHouseholdId) {
+    return;
+  }
+
+  unreadCount.value = event.unreadCount;
+
+  const incoming = event.notification;
+  const existingIndex = notifications.value.findIndex((notification) => notification.id === incoming.id);
+  if (existingIndex >= 0) {
+    notifications.value[existingIndex] = incoming;
+    return;
+  }
+
+  notifications.value = [incoming, ...notifications.value].slice(0, 30);
+};
+
+const clearReconnectTimer = () => {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+};
+
+const closeSocket = () => {
+  clearReconnectTimer();
+  if (disconnectSocket) {
+    disconnectSocket();
+    disconnectSocket = null;
+  }
+  socketConnected.value = false;
+};
+
+const scheduleReconnect = () => {
+  clearReconnectTimer();
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void connectSocket();
+  }, 2500);
+};
+
+const connectSocket = async () => {
+  closeSocket();
+
+  const token = session.token;
+  if (!token || !session.activeHouseholdId || unmounted) {
+    return;
+  }
+
+  disconnectSocket = connectNotificationSocket({
+    token,
+    onEvent: handleRealtimeEvent,
+    onConnected: () => {
+      socketConnected.value = true;
+    },
+    onDisconnected: () => {
+      socketConnected.value = false;
+      if (!unmounted) {
+        scheduleReconnect();
+      }
+    }
+  });
+};
+
+const formatDateTime = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+};
+
 watch(
-  () => session.activeHouseholdId,
+  () => [session.activeHouseholdId, session.token] as const,
   () => {
     void load();
+    void connectSocket();
   },
   { immediate: true }
 );
+
+onBeforeUnmount(() => {
+  unmounted = true;
+  closeSocket();
+});
 </script>

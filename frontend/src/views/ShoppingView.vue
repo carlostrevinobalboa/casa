@@ -3,7 +3,7 @@
     <div>
       <h2 class="text-xl font-semibold">Compra inteligente</h2>
       <p class="mt-1 text-sm text-slate-600">
-        Productos faltantes desde recetas y despensa, mas altas manuales.
+        Productos faltantes desde recetas y despensa, mas altas manuales y precio real de compra.
       </p>
     </div>
 
@@ -98,6 +98,7 @@
             <th class="px-3 py-2">Cantidad</th>
             <th class="px-3 py-2">Categoria</th>
             <th class="px-3 py-2">Origen</th>
+            <th class="px-3 py-2">Precio total (€)</th>
             <th class="px-3 py-2">Estado</th>
             <th class="px-3 py-2">Acciones</th>
           </tr>
@@ -108,6 +109,18 @@
             <td class="px-3 py-2">{{ item.quantity }} {{ item.unit }}</td>
             <td class="px-3 py-2">{{ item.category }}</td>
             <td class="px-3 py-2">{{ sourceLabel(item.sourceType) }}</td>
+            <td class="px-3 py-2">
+              <input
+                v-if="!item.purchased"
+                v-model.number="purchasePrices[item.id]"
+                min="0"
+                step="0.01"
+                type="number"
+                class="w-28 rounded border border-slate-300 px-2 py-1 text-xs"
+                placeholder="0.00"
+              />
+              <span v-else class="text-slate-400">-</span>
+            </td>
             <td class="px-3 py-2">
               <span
                 class="rounded px-2 py-1 text-xs font-medium"
@@ -136,11 +149,50 @@
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="6" class="px-3 py-6 text-center text-slate-500">No hay items en la lista de compra.</td>
+            <td colspan="7" class="px-3 py-6 text-center text-slate-500">No hay items en la lista de compra.</td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <section class="space-y-3 rounded-xl border border-slate-200 p-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-medium text-slate-800">Historico de compras</h3>
+        <button
+          type="button"
+          class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+          @click="loadHistory"
+        >
+          Recargar
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-left text-slate-500">
+              <th class="px-3 py-2">Fecha</th>
+              <th class="px-3 py-2">Producto</th>
+              <th class="px-3 py-2">Cantidad</th>
+              <th class="px-3 py-2">Precio total</th>
+              <th class="px-3 py-2">Precio/u</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="purchase in purchaseHistory" :key="purchase.id" class="border-b border-slate-100">
+              <td class="px-3 py-2">{{ formatDateTime(purchase.purchasedAt) }}</td>
+              <td class="px-3 py-2 font-medium text-slate-900">{{ purchase.productName }}</td>
+              <td class="px-3 py-2">{{ purchase.quantity }} {{ purchase.unit }}</td>
+              <td class="px-3 py-2">{{ formatCurrency(purchase.totalPrice) }}</td>
+              <td class="px-3 py-2">{{ purchase.unitPrice == null ? "-" : formatCurrency(purchase.unitPrice) }}</td>
+            </tr>
+            <tr v-if="purchaseHistory.length === 0">
+              <td colspan="5" class="px-3 py-6 text-center text-slate-500">Todavia no hay compras registradas.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </section>
 </template>
 
@@ -154,12 +206,15 @@ import type {
   CatalogProduct,
   CatalogUnit,
   ShoppingListItem,
-  ShoppingListItemRequest
+  ShoppingListItemRequest,
+  ShoppingPurchase
 } from "../types";
 
 const session = useSessionStore();
 
 const items = ref<ShoppingListItem[]>([]);
+const purchaseHistory = ref<ShoppingPurchase[]>([]);
+const purchasePrices = reactive<Record<string, number | null>>({});
 const catalogUnits = ref<CatalogUnit[]>([]);
 const catalogCategories = ref<CatalogCategory[]>([]);
 const catalogProducts = ref<CatalogProduct[]>([]);
@@ -231,6 +286,17 @@ const load = async () => {
   items.value = data;
 };
 
+const loadHistory = async () => {
+  const id = householdId();
+  if (!id) {
+    purchaseHistory.value = [];
+    return;
+  }
+
+  const { data } = await api.get<ShoppingPurchase[]>(`/api/households/${id}/shopping-list-items/history`);
+  purchaseHistory.value = data;
+};
+
 const onProductChange = (productName: string) => {
   const product = findProductInCatalog(catalogProducts.value, productName);
   if (!product) {
@@ -267,15 +333,38 @@ const setPurchased = async (itemId: string, purchased: boolean) => {
   const id = householdId();
   if (!id) return;
 
-  const action = purchased ? "purchase" : "unpurchase";
-  await api.post(`/api/households/${id}/shopping-list-items/${itemId}/${action}`);
-  await load();
+  errorMessage.value = "";
+  if (purchased) {
+    const rawTotalPrice = purchasePrices[itemId];
+    const totalPrice = rawTotalPrice == null ? Number.NaN : Number(rawTotalPrice);
+    if (!Number.isFinite(totalPrice) || totalPrice < 0) {
+      errorMessage.value = "Indica un precio total valido antes de marcar como comprado.";
+      return;
+    }
+
+    await api.post(`/api/households/${id}/shopping-list-items/${itemId}/purchase`, {
+      totalPrice: Number(totalPrice.toFixed(2))
+    });
+    delete purchasePrices[itemId];
+  } else {
+    await api.post(`/api/households/${id}/shopping-list-items/${itemId}/unpurchase`);
+  }
+
+  await Promise.all([load(), loadHistory()]);
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(value);
+
+const formatDateTime = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
 watch(
   () => session.activeHouseholdId,
   () => {
-    void Promise.all([loadCatalog(), load()]);
+    void Promise.all([loadCatalog(), load(), loadHistory()]);
   },
   { immediate: true }
 );

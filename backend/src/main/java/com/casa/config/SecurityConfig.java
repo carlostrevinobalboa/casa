@@ -50,6 +50,8 @@ public class SecurityConfig {
                     "/api/auth/**",
                     "/oauth2/**",
                     "/login/oauth2/**",
+                    "/ws/**",
+                    "/ws-sockjs/**",
                     "/error"
                 ).permitAll()
                 .anyRequest().authenticated()
