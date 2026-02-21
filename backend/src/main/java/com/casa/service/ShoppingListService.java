@@ -97,6 +97,41 @@ public class ShoppingListService {
     }
 
     @Transactional
+    public void addOrIncreaseForPetFood(
+        UUID householdId,
+        UUID userId,
+        String productName,
+        double quantity,
+        String unit
+    ) {
+        String normalizedProductName = productName.trim();
+        String normalizedUnit = unit.trim();
+        double normalizedQuantity = Math.max(0.1, quantity);
+
+        shoppingListItemRepository
+            .findByHouseholdIdAndProductNameIgnoreCaseAndUnitIgnoreCaseAndSourceTypeAndPurchasedFalse(
+                householdId,
+                normalizedProductName,
+                normalizedUnit,
+                ShoppingItemSourceType.PET_FOOD_LOW
+            )
+            .map(existing -> {
+                existing.setQuantity(normalizedQuantity);
+                existing.setCategory("MASCOTAS");
+                return shoppingListItemRepository.save(existing);
+            })
+            .orElseGet(() -> upsertPendingItem(
+                householdId,
+                userId,
+                normalizedProductName,
+                normalizedQuantity,
+                normalizedUnit,
+                "MASCOTAS",
+                ShoppingItemSourceType.PET_FOOD_LOW
+            ));
+    }
+
+    @Transactional
     public void syncFromPantryMinimum(UUID householdId, UUID userId, PantryItem pantryItem) {
         double missing = pantryItem.getMinimumQuantity() - pantryItem.getCurrentQuantity();
         if (missing <= 0.0) {

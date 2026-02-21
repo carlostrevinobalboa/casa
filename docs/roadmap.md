@@ -14,7 +14,7 @@
 - Notificaciones en tiempo real (WebSocket) por usuario (hecho)
 
 ## Fase 3 - Mascotas y actividad
-- Mascotas: datos base, comida, cuidados y recordatorios
+- Mascotas: datos base, comida, cuidados y recordatorios (en progreso, MVP backend/frontend hecho)
 - Paseos con GPS + mapa + estadisticas semanales
 - Actividades deportivas con GPS + historico + estadisticas
 

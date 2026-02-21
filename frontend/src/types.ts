@@ -110,7 +110,7 @@ export interface ShoppingListItem {
   quantity: number;
   unit: string;
   category: string;
-  sourceType: "MANUAL" | "RECIPE_SHORTAGE" | "PANTRY_MINIMUM_LOW";
+  sourceType: "MANUAL" | "RECIPE_SHORTAGE" | "PANTRY_MINIMUM_LOW" | "PET_FOOD_LOW";
   purchased: boolean;
   purchasedAt: string | null;
 }
@@ -171,5 +171,89 @@ export interface CatalogProductRequest {
   name: string;
   defaultUnitCode: string | null;
   defaultCategoryName: string | null;
+  active: boolean;
+}
+
+export type PetCareType = "VACCINATION" | "GROOMING" | "DEWORMING" | "VET_VISIT" | "OTHER";
+
+export interface Pet {
+  id: string;
+  name: string;
+  type: string;
+  chipCode: string | null;
+  veterinarian: string | null;
+  photoUrl: string | null;
+  currentWeightKg: number | null;
+  foodName: string | null;
+  foodStockQuantity: number | null;
+  foodDailyConsumptionQuantity: number | null;
+  foodUnit: string | null;
+  foodDaysRemaining: number | null;
+  foodLow: boolean;
+  active: boolean;
+}
+
+export interface PetRequest {
+  name: string;
+  type: string;
+  chipCode: string | null;
+  veterinarian: string | null;
+  photoUrl: string | null;
+  currentWeightKg: number | null;
+  foodName: string | null;
+  foodStockQuantity: number | null;
+  foodDailyConsumptionQuantity: number | null;
+  foodUnit: string | null;
+  active: boolean;
+}
+
+export interface PetFeeding {
+  id: string;
+  foodType: string;
+  quantity: number;
+  unit: string;
+  fedAt: string;
+  notes: string | null;
+  addedByUserId: string;
+}
+
+export interface PetFeedingRequest {
+  foodType: string;
+  quantity: number;
+  unit: string;
+  fedAt: string | null;
+  notes: string | null;
+}
+
+export interface PetWeight {
+  id: string;
+  weightKg: number;
+  recordedAt: string;
+  addedByUserId: string;
+}
+
+export interface PetWeightRequest {
+  weightKg: number;
+  recordedAt: string | null;
+}
+
+export interface PetCareTask {
+  id: string;
+  careType: PetCareType;
+  description: string | null;
+  frequencyDays: number;
+  notifyDaysBefore: number;
+  lastPerformedAt: string | null;
+  nextDueAt: string;
+  dueSoon: boolean;
+  active: boolean;
+}
+
+export interface PetCareTaskRequest {
+  careType: PetCareType;
+  description: string | null;
+  frequencyDays: number;
+  notifyDaysBefore: number;
+  lastPerformedAt: string | null;
   active: boolean;
 }

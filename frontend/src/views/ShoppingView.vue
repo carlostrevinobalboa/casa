@@ -240,6 +240,7 @@ const canCreateShoppingItem = computed(() =>
 const sourceLabel = (source: ShoppingListItem["sourceType"]) => {
   if (source === "MANUAL") return "Manual";
   if (source === "RECIPE_SHORTAGE") return "Faltante receta";
+  if (source === "PET_FOOD_LOW") return "Comida mascota";
   return "Stock minimo";
 };
 
