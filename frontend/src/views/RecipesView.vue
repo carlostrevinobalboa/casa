@@ -69,18 +69,13 @@
             <label :for="`ingredient-name-${index}`" class="mb-1 block text-xs text-slate-600">
               Producto
             </label>
-            <select
+            <SearchableSelect
               :id="`ingredient-name-${index}`"
               v-model="ingredient.productName"
-              required
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              @change="onIngredientProductChange(ingredient)"
-            >
-              <option value="" disabled>Selecciona un producto</option>
-              <option v-for="product in catalogProducts" :key="product.id" :value="product.name">
-                {{ product.name }}
-              </option>
-            </select>
+              :options="productOptions"
+              placeholder="Selecciona un producto"
+              @update:modelValue="() => onIngredientProductChange(ingredient)"
+            />
           </div>
 
           <div>
@@ -102,17 +97,12 @@
             <label :for="`ingredient-unit-${index}`" class="mb-1 block text-xs text-slate-600">
               Unidad
             </label>
-            <select
+            <SearchableSelect
               :id="`ingredient-unit-${index}`"
               v-model="ingredient.unit"
-              required
-              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              <option value="" disabled>Selecciona unidad</option>
-              <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code">
-                {{ unit.code }} - {{ unit.label }}
-              </option>
-            </select>
+              :options="unitOptions"
+              placeholder="Selecciona unidad"
+            />
           </div>
 
           <div class="self-end">
@@ -167,9 +157,16 @@
             </button>
             <button
               type="button"
-              class="rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+              class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
               @click="deleteRecipe(recipe.id)"
             >
+              <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M6 6l1 14h10l1-14" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
               Eliminar
             </button>
           </div>
@@ -209,6 +206,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
+import SearchableSelect from "../components/SearchableSelect.vue";
 import type {
   CatalogProduct,
   CatalogUnit,
@@ -231,6 +229,12 @@ const defaultProductName = () => catalogProducts.value[0]?.name ?? "";
 const canCreateRecipe = computed(() =>
   catalogProducts.value.length > 0
   && catalogUnits.value.length > 0
+);
+const productOptions = computed(() =>
+  catalogProducts.value.map((product) => ({ value: product.name, label: product.name }))
+);
+const unitOptions = computed(() =>
+  catalogUnits.value.map((unit) => ({ value: unit.code, label: `${unit.code} - ${unit.label}` }))
 );
 
 const createEmptyIngredient = (): RecipeIngredientRequest => ({

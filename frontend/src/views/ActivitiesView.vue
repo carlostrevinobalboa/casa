@@ -14,49 +14,36 @@
         <label for="activity-user-filter" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Usuario
         </label>
-        <select
+        <SearchableSelect
           id="activity-user-filter"
           v-model="selectedUserFilter"
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="all">Todos</option>
-          <option v-for="member in members" :key="member.userId" :value="member.userId">
-            {{ member.displayName }}
-          </option>
-        </select>
+          :options="userFilterOptions"
+          placeholder="Todos"
+        />
       </div>
 
       <div>
         <label for="activity-type-filter" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Tipo actividad
         </label>
-        <select
+        <SearchableSelect
           id="activity-type-filter"
           v-model="activityTypeFilter"
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="all">Todos</option>
-          <option value="RUN">Correr</option>
-          <option value="WALK">Caminar</option>
-          <option value="BIKE">Bici</option>
-          <option value="PET_WALK">Paseo mascota</option>
-        </select>
+          :options="typeFilterOptions"
+          placeholder="Todos"
+        />
       </div>
 
       <div>
         <label for="activity-pet-filter" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Mascota
         </label>
-        <select
+        <SearchableSelect
           id="activity-pet-filter"
           v-model="selectedPetFilter"
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="all">Todas</option>
-          <option v-for="pet in pets" :key="pet.id" :value="pet.id">
-            {{ pet.name }}
-          </option>
-        </select>
+          :options="petFilterOptions"
+          placeholder="Todas"
+        />
       </div>
 
       <button
@@ -79,32 +66,25 @@
           <label for="tracking-mode" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Modo
           </label>
-          <select
+          <SearchableSelect
             id="tracking-mode"
             v-model="trackingMode"
+            :options="trackingModeOptions"
             :disabled="trackingInProgress"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="RUN">Correr</option>
-            <option value="WALK">Caminar</option>
-            <option value="BIKE">Bici</option>
-            <option value="PET_WALK">Paseo mascota</option>
-          </select>
+          />
         </div>
 
         <div v-if="trackingMode === 'PET_WALK'">
           <label for="tracking-pet" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Mascota
           </label>
-          <select
+          <SearchableSelect
             id="tracking-pet"
             v-model="trackingPetId"
+            :options="trackingPetOptions"
             :disabled="trackingInProgress"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="">Selecciona mascota</option>
-            <option v-for="pet in pets" :key="pet.id" :value="pet.id">{{ pet.name }}</option>
-          </select>
+            placeholder="Selecciona mascota"
+          />
         </div>
 
         <div class="rounded-lg bg-slate-50 px-3 py-2">
@@ -122,7 +102,7 @@
         <button
           type="button"
           class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="!supportsGeolocation || trackingInProgress"
+          :disabled="trackingInProgress || !supportsGeolocation"
           @click="startTracking"
         >
           Iniciar GPS
@@ -197,34 +177,35 @@
           <label for="activity-type" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Tipo
           </label>
-          <select id="activity-type" v-model="activityForm.type" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="RUN">Correr</option>
-            <option value="WALK">Caminar</option>
-            <option value="BIKE">Bici</option>
-            <option value="PET_WALK">Paseo mascota</option>
-          </select>
+          <SearchableSelect
+            id="activity-type"
+            v-model="activityForm.type"
+            :options="activityTypeOptions"
+          />
         </div>
 
         <div>
           <label for="activity-user" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Usuario
           </label>
-          <select id="activity-user" v-model="activityForm.performedByUserId" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Yo</option>
-            <option v-for="member in members" :key="member.userId" :value="member.userId">
-              {{ member.displayName }}
-            </option>
-          </select>
+          <SearchableSelect
+            id="activity-user"
+            v-model="activityForm.performedByUserId"
+            :options="activityUserOptions"
+            placeholder="Yo"
+          />
         </div>
 
         <div v-if="activityForm.type === 'PET_WALK'">
           <label for="activity-pet" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Mascota
           </label>
-          <select id="activity-pet" v-model="activityForm.petId" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Selecciona mascota</option>
-            <option v-for="pet in pets" :key="pet.id" :value="pet.id">{{ pet.name }}</option>
-          </select>
+          <SearchableSelect
+            id="activity-pet"
+            v-model="activityForm.petId"
+            :options="activityPetOptions"
+            placeholder="Selecciona mascota"
+          />
         </div>
 
         <div>
@@ -294,7 +275,7 @@
         </div>
 
         <label class="mt-6 inline-flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="activityForm.gpsTracked" type="checkbox" class="rounded border-slate-300" />
+          <input v-model="activityForm.gpsTracked" type="checkbox" class="toggle-modern" />
           Seguimiento GPS
         </label>
 
@@ -412,6 +393,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import RouteMap from "../components/RouteMap.vue";
 import { api } from "../lib/api";
 import { useSessionStore } from "../stores/session";
+import SearchableSelect from "../components/SearchableSelect.vue";
 import type {
   Activity,
   ActivityPointRequest,
@@ -498,6 +480,40 @@ let trackingTimer: ReturnType<typeof setInterval> | null = null;
 const householdId = () => session.activeHouseholdId;
 const selectedActivity = computed(() => activities.value.find((activity) => activity.id === selectedActivityId.value) ?? null);
 const trackingDistanceKm = computed(() => roundDistanceKm(calculateDistanceKm(trackingPoints.value)));
+const userFilterOptions = computed(() => [
+  { value: "all", label: "Todos" },
+  ...members.value.map((member) => ({ value: member.userId, label: member.displayName }))
+]);
+const typeFilterOptions = computed(() => [
+  { value: "all", label: "Todos" },
+  { value: "RUN", label: "Correr" },
+  { value: "WALK", label: "Caminar" },
+  { value: "BIKE", label: "Bici" },
+  { value: "PET_WALK", label: "Paseo mascota" }
+]);
+const petFilterOptions = computed(() => [
+  { value: "all", label: "Todas" },
+  ...pets.value.map((pet) => ({ value: pet.id, label: pet.name }))
+]);
+const trackingModeOptions = computed(() => [
+  { value: "RUN", label: "Correr" },
+  { value: "WALK", label: "Caminar" },
+  { value: "BIKE", label: "Bici" },
+  { value: "PET_WALK", label: "Paseo mascota" }
+]);
+const trackingPetOptions = computed(() => [
+  { value: "", label: "Selecciona mascota" },
+  ...pets.value.map((pet) => ({ value: pet.id, label: pet.name }))
+]);
+const activityTypeOptions = trackingModeOptions;
+const activityUserOptions = computed(() => [
+  { value: "", label: "Yo" },
+  ...members.value.map((member) => ({ value: member.userId, label: member.displayName }))
+]);
+const activityPetOptions = computed(() => [
+  { value: "", label: "Selecciona mascota" },
+  ...pets.value.map((pet) => ({ value: pet.id, label: pet.name }))
+]);
 
 const loadMembers = async () => {
   const id = householdId();

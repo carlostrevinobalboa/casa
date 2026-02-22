@@ -54,7 +54,7 @@
         </div>
 
         <label class="mt-6 inline-flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="unitForm.active" type="checkbox" class="rounded border-slate-300" />
+          <input v-model="unitForm.active" type="checkbox" class="toggle-modern" />
           Activa
         </label>
 
@@ -104,17 +104,28 @@
                   <button
                     type="button"
                     :disabled="!isAdmin"
-                    class="rounded border border-slate-300 px-2 py-1 text-xs enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="editUnit(unit)"
                   >
+                    <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                    </svg>
                     Editar
                   </button>
                   <button
                     type="button"
                     :disabled="!isAdmin"
-                    class="rounded border border-red-300 px-2 py-1 text-xs text-red-700 enabled:hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 enabled:hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="deleteUnit(unit.id)"
                   >
+                    <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M6 6l1 14h10l1-14" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                    </svg>
                     Eliminar
                   </button>
                 </div>
@@ -150,7 +161,7 @@
         </div>
 
         <label class="mt-6 inline-flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="categoryForm.active" type="checkbox" class="rounded border-slate-300" />
+          <input v-model="categoryForm.active" type="checkbox" class="toggle-modern" />
           Activa
         </label>
 
@@ -198,17 +209,28 @@
                   <button
                     type="button"
                     :disabled="!isAdmin"
-                    class="rounded border border-slate-300 px-2 py-1 text-xs enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="editCategory(category)"
                   >
+                    <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                    </svg>
                     Editar
                   </button>
                   <button
                     type="button"
                     :disabled="!isAdmin"
-                    class="rounded border border-red-300 px-2 py-1 text-xs text-red-700 enabled:hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 enabled:hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="deleteCategory(category.id)"
                   >
+                    <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M6 6l1 14h10l1-14" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                    </svg>
                     Eliminar
                   </button>
                 </div>
@@ -247,36 +269,28 @@
           <label for="product-default-unit" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Unidad por defecto
           </label>
-          <select
+          <SearchableSelect
             id="product-default-unit"
             v-model="productForm.defaultUnitCode"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="">Sin unidad por defecto</option>
-            <option v-for="unit in units" :key="unit.id" :value="unit.code">
-              {{ unit.code }} - {{ unit.label }}
-            </option>
-          </select>
+            :options="unitOptions"
+            placeholder="Sin unidad por defecto"
+          />
         </div>
 
         <div>
           <label for="product-default-category" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Categoria por defecto
           </label>
-          <select
+          <SearchableSelect
             id="product-default-category"
             v-model="productForm.defaultCategoryName"
-            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="">Sin categoria por defecto</option>
-            <option v-for="category in categories" :key="category.id" :value="category.name">
-              {{ category.name }}
-            </option>
-          </select>
+            :options="categoryOptions"
+            placeholder="Sin categoria por defecto"
+          />
         </div>
 
         <label class="mt-6 inline-flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="productForm.active" type="checkbox" class="rounded border-slate-300" />
+          <input v-model="productForm.active" type="checkbox" class="toggle-modern" />
           Activo
         </label>
 
@@ -328,17 +342,28 @@
                   <button
                     type="button"
                     :disabled="!isAdmin"
-                    class="rounded border border-slate-300 px-2 py-1 text-xs enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="editProduct(product)"
                   >
+                    <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                    </svg>
                     Editar
                   </button>
                   <button
                     type="button"
                     :disabled="!isAdmin"
-                    class="rounded border border-red-300 px-2 py-1 text-xs text-red-700 enabled:hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 enabled:hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="deleteProduct(product.id)"
                   >
+                    <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M6 6l1 14h10l1-14" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                    </svg>
                     Eliminar
                   </button>
                 </div>
@@ -358,6 +383,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { useSessionStore } from "../stores/session";
+import SearchableSelect from "../components/SearchableSelect.vue";
 import type {
   CatalogCategory,
   CatalogCategoryRequest,
@@ -420,6 +446,14 @@ const isAdmin = computed(() => {
 });
 
 const activeRoleLabel = computed(() => session.activeHousehold?.role ?? "MEMBER");
+const unitOptions = computed(() => [
+  { value: "", label: "Sin unidad por defecto" },
+  ...units.value.map((unit) => ({ value: unit.code, label: `${unit.code} - ${unit.label}` }))
+]);
+const categoryOptions = computed(() => [
+  { value: "", label: "Sin categoria por defecto" },
+  ...categories.value.map((category) => ({ value: category.name, label: category.name }))
+]);
 
 const resetUnitForm = () => {
   unitForm.id = null;

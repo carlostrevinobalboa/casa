@@ -39,9 +39,11 @@
           <label for="pet-type" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Tipo
           </label>
-          <select id="pet-type" v-model="petForm.type" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option v-for="type in petTypeOptions" :key="type" :value="type">{{ type }}</option>
-          </select>
+          <SearchableSelect
+            id="pet-type"
+            v-model="petForm.type"
+            :options="petTypeSelectOptions"
+          />
         </div>
 
         <div>
@@ -140,14 +142,16 @@
           <label for="pet-food-unit" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
             Unidad comida
           </label>
-          <select id="pet-food-unit" v-model="petForm.foodUnit" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            <option value="">Sin unidad</option>
-            <option v-for="unit in foodUnitOptions" :key="unit" :value="unit">{{ unit }}</option>
-          </select>
+          <SearchableSelect
+            id="pet-food-unit"
+            v-model="petForm.foodUnit"
+            :options="foodUnitSelectOptions"
+            placeholder="Sin unidad"
+          />
         </div>
 
         <label class="mt-6 inline-flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="petForm.active" type="checkbox" class="rounded border-slate-300" />
+          <input v-model="petForm.active" type="checkbox" class="toggle-modern" />
           Activa
         </label>
 
@@ -195,16 +199,27 @@
             </button>
             <button
               type="button"
-              class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+              class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50"
               @click="editPet(pet)"
             >
+              <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+              </svg>
               Editar
             </button>
             <button
               type="button"
-              class="rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+              class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
               @click="deletePet(pet.id)"
             >
+              <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M6 6l1 14h10l1-14" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
               Eliminar
             </button>
           </div>
@@ -247,9 +262,11 @@
             <label for="feed-unit" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
               Unidad
             </label>
-            <select id="feed-unit" v-model="feedingForm.unit" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              <option v-for="unit in foodUnitOptions" :key="unit" :value="unit">{{ unit }}</option>
-            </select>
+            <SearchableSelect
+              id="feed-unit"
+              v-model="feedingForm.unit"
+              :options="foodUnitOnlyOptions"
+            />
           </div>
           <button type="submit" class="self-end rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700">
             Registrar comida
@@ -271,13 +288,11 @@
             <label for="care-type" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
               Tipo
             </label>
-            <select id="care-type" v-model="careForm.careType" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              <option value="VACCINATION">Vacunacion</option>
-              <option value="GROOMING">Peluqueria</option>
-              <option value="DEWORMING">Desparasitacion</option>
-              <option value="VET_VISIT">Veterinario</option>
-              <option value="OTHER">Otro</option>
-            </select>
+            <SearchableSelect
+              id="care-type"
+              v-model="careForm.careType"
+              :options="careTypeOptions"
+            />
           </div>
           <div>
             <label for="care-frequency" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
@@ -455,6 +470,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { useSessionStore } from "../stores/session";
 import RouteMap from "../components/RouteMap.vue";
+import SearchableSelect from "../components/SearchableSelect.vue";
 import type {
   Activity,
   ActivityWeeklyStats,
@@ -492,6 +508,19 @@ const petWalkStats = ref<ActivityWeeklyStats>({
 
 const petTypeOptions = ["DOG", "CAT", "BIRD", "OTHER"];
 const foodUnitOptions = ["G", "KG", "ML", "L", "UD"];
+const petTypeSelectOptions = petTypeOptions.map((type) => ({ value: type, label: type }));
+const foodUnitSelectOptions = [
+  { value: "", label: "Sin unidad" },
+  ...foodUnitOptions.map((unit) => ({ value: unit, label: unit }))
+];
+const foodUnitOnlyOptions = foodUnitOptions.map((unit) => ({ value: unit, label: unit }));
+const careTypeOptions = [
+  { value: "VACCINATION", label: "Vacunacion" },
+  { value: "GROOMING", label: "Peluqueria" },
+  { value: "DEWORMING", label: "Desparasitacion" },
+  { value: "VET_VISIT", label: "Veterinario" },
+  { value: "OTHER", label: "Otro" }
+];
 
 const emptyStringToNull = (value: string | null | undefined): string | null => {
   if (!value) return null;

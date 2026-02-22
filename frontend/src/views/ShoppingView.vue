@@ -12,18 +12,13 @@
         <label for="shopping-product-name" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Producto
         </label>
-        <select
+        <SearchableSelect
           id="shopping-product-name"
           v-model="form.productName"
-          required
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          @change="onProductChange(form.productName)"
-        >
-          <option value="" disabled>Selecciona un producto</option>
-          <option v-for="product in catalogProducts" :key="product.id" :value="product.name">
-            {{ product.name }}
-          </option>
-        </select>
+          :options="productOptions"
+          placeholder="Selecciona un producto"
+          @update:modelValue="(value) => { form.productName = value; onProductChange(value); }"
+        />
       </div>
 
       <div>
@@ -45,34 +40,24 @@
         <label for="shopping-unit" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Unidad
         </label>
-        <select
+        <SearchableSelect
           id="shopping-unit"
           v-model="form.unit"
-          required
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="" disabled>Selecciona unidad</option>
-          <option v-for="unit in catalogUnits" :key="unit.id" :value="unit.code">
-            {{ unit.code }} - {{ unit.label }}
-          </option>
-        </select>
+          :options="unitOptions"
+          placeholder="Selecciona unidad"
+        />
       </div>
 
       <div>
         <label for="shopping-category" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Categoria
         </label>
-        <select
+        <SearchableSelect
           id="shopping-category"
           v-model="form.category"
-          required
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="" disabled>Selecciona categoria</option>
-          <option v-for="category in catalogCategories" :key="category.id" :value="category.name">
-            {{ category.name }}
-          </option>
-        </select>
+          :options="categoryOptions"
+          placeholder="Selecciona categoria"
+        />
       </div>
 
       <button
@@ -201,6 +186,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { fetchHouseholdCatalog, findProductInCatalog } from "../lib/catalog";
 import { useSessionStore } from "../stores/session";
+import SearchableSelect from "../components/SearchableSelect.vue";
 import type {
   CatalogCategory,
   CatalogProduct,
@@ -235,6 +221,15 @@ const canCreateShoppingItem = computed(() =>
   catalogProducts.value.length > 0
   && catalogUnits.value.length > 0
   && catalogCategories.value.length > 0
+);
+const productOptions = computed(() =>
+  catalogProducts.value.map((product) => ({ value: product.name, label: product.name }))
+);
+const unitOptions = computed(() =>
+  catalogUnits.value.map((unit) => ({ value: unit.code, label: `${unit.code} - ${unit.label}` }))
+);
+const categoryOptions = computed(() =>
+  catalogCategories.value.map((category) => ({ value: category.name, label: category.name }))
 );
 
 const sourceLabel = (source: ShoppingListItem["sourceType"]) => {

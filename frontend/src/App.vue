@@ -14,21 +14,13 @@
             <label for="active-household" class="text-[11px] uppercase tracking-wide text-white/80">
               Hogar activo
             </label>
-            <select
+            <SearchableSelect
               id="active-household"
               v-model="selectedHouseholdId"
-              class="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-sm text-white outline-none"
-              @change="onHouseholdChange"
-            >
-              <option
-                v-for="household in session.households"
-                :key="household.id"
-                :value="household.id"
-                class="text-slate-900"
-              >
-                {{ household.name }} ({{ household.inviteCode }})
-              </option>
-            </select>
+              :options="householdOptions"
+              placeholder="Selecciona hogar"
+              @update:modelValue="onHouseholdChange"
+            />
           </div>
 
           <p class="text-sm">
@@ -72,6 +64,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useSessionStore } from "./stores/session";
+import SearchableSelect from "./components/SearchableSelect.vue";
 
 const router = useRouter();
 const session = useSessionStore();
@@ -85,6 +78,12 @@ const selectedHouseholdId = computed({
   }
 });
 
+const householdOptions = computed(() =>
+  session.households.map((household) => ({
+    value: household.id,
+    label: `${household.name} (${household.inviteCode})`
+  }))
+);
 const items = [
   { to: "/", label: "Dashboard" },
   { to: "/despensa", label: "Despensa" },
