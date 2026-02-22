@@ -9,7 +9,7 @@
 
     <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ errorMessage }}</p>
 
-    <article class="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-3">
+    <article class="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
       <div>
         <label for="activity-user-filter" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
           Usuario
@@ -40,6 +40,22 @@
           <option value="WALK">Caminar</option>
           <option value="BIKE">Bici</option>
           <option value="PET_WALK">Paseo mascota</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="activity-pet-filter" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+          Mascota
+        </label>
+        <select
+          id="activity-pet-filter"
+          v-model="selectedPetFilter"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        >
+          <option value="all">Todas</option>
+          <option v-for="pet in pets" :key="pet.id" :value="pet.id">
+            {{ pet.name }}
+          </option>
         </select>
       </div>
 
@@ -428,6 +444,7 @@ const errorMessage = ref("");
 
 const selectedUserFilter = ref<string | "all">(session.activityUserFilter ?? "all");
 const activityTypeFilter = ref<ActivityType | "all">("all");
+const selectedPetFilter = ref<string | "all">("all");
 const selectedActivityId = ref("");
 
 const stats = ref<ActivityWeeklyStats>({
@@ -501,11 +518,15 @@ const loadPets = async () => {
   const id = householdId();
   if (!id) {
     pets.value = [];
+    selectedPetFilter.value = "all";
     return;
   }
 
   const { data } = await api.get<Pet[]>(`/api/households/${id}/pets`);
   pets.value = data;
+  if (selectedPetFilter.value !== "all" && !pets.value.some((pet) => pet.id === selectedPetFilter.value)) {
+    selectedPetFilter.value = "all";
+  }
 };
 
 const loadActivities = async () => {
@@ -522,6 +543,9 @@ const loadActivities = async () => {
   }
   if (activityTypeFilter.value !== "all") {
     params.type = activityTypeFilter.value;
+  }
+  if (selectedPetFilter.value !== "all") {
+    params.petId = selectedPetFilter.value;
   }
 
   const { data } = await api.get<Activity[]>(`/api/households/${id}/activities`, { params });
@@ -545,6 +569,9 @@ const loadStats = async () => {
   }
   if (activityTypeFilter.value !== "all") {
     params.type = activityTypeFilter.value;
+  }
+  if (selectedPetFilter.value !== "all") {
+    params.petId = selectedPetFilter.value;
   }
 
   const { data } = await api.get<ActivityWeeklyStats>(`/api/households/${id}/activities/stats/weekly`, { params });
@@ -848,6 +875,7 @@ watch(
   () => {
     selectedUserFilter.value = session.activityUserFilter ?? "all";
     activityTypeFilter.value = "all";
+    selectedPetFilter.value = "all";
     selectedActivityId.value = "";
     resetForm();
     cancelTracking();
@@ -866,6 +894,13 @@ watch(
 
 watch(
   () => activityTypeFilter.value,
+  () => {
+    void Promise.all([loadActivities(), loadStats()]);
+  }
+);
+
+watch(
+  () => selectedPetFilter.value,
   () => {
     void Promise.all([loadActivities(), loadStats()]);
   }

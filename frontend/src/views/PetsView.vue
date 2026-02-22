@@ -338,6 +338,176 @@
       </article>
 
       <article class="space-y-3 rounded-xl border border-slate-200 p-4">
+        <h3 class="text-sm font-medium text-slate-800">Paseos - {{ selectedPet.name }}</h3>
+
+        <form class="grid gap-3 md:grid-cols-4" @submit.prevent="createPetWalk">
+          <div>
+            <label for="pet-walk-start" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+              Inicio
+            </label>
+            <input
+              id="pet-walk-start"
+              v-model="petWalkForm.startedAt"
+              type="datetime-local"
+              required
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label for="pet-walk-end" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+              Fin
+            </label>
+            <input
+              id="pet-walk-end"
+              v-model="petWalkForm.endedAt"
+              type="datetime-local"
+              required
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div>
+            <label for="pet-walk-distance" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+              Distancia (km)
+            </label>
+            <input
+              id="pet-walk-distance"
+              v-model.number="petWalkForm.distanceKm"
+              min="0"
+              step="0.01"
+              type="number"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div class="md:col-span-2">
+            <label for="pet-walk-notes" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+              Notas
+            </label>
+            <input
+              id="pet-walk-notes"
+              v-model="petWalkForm.notes"
+              maxlength="200"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Ritmo, clima, etc."
+            />
+          </div>
+
+          <div class="md:col-span-4 space-y-2 rounded-lg border border-slate-200 p-3">
+            <div class="flex items-center justify-between">
+              <p class="text-sm font-medium text-slate-700">Puntos de recorrido (opcional)</p>
+              <button
+                type="button"
+                class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+                @click="addPetWalkPoint"
+              >
+                Anadir punto
+              </button>
+            </div>
+
+            <div
+              v-for="(point, index) in petWalkForm.points"
+              :key="`pet-walk-point-${index}`"
+              class="grid gap-2 md:grid-cols-[1fr_1fr_auto]"
+            >
+              <input
+                v-model.number="point.latitude"
+                step="0.000001"
+                type="number"
+                class="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Latitud"
+              />
+              <input
+                v-model.number="point.longitude"
+                step="0.000001"
+                type="number"
+                class="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Longitud"
+              />
+              <button
+                type="button"
+                class="rounded border border-red-300 px-2 py-2 text-xs text-red-700 hover:bg-red-50"
+                @click="removePetWalkPoint(index)"
+              >
+                Quitar
+              </button>
+            </div>
+
+            <RouteMap v-if="petWalkForm.points.length > 0" :points="petWalkForm.points" height-class="h-60" />
+          </div>
+
+          <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700">
+            Registrar paseo
+          </button>
+        </form>
+
+        <div class="grid gap-3 md:grid-cols-3">
+          <div class="rounded-lg bg-slate-50 p-3">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Paseos semana</p>
+            <p class="text-lg font-semibold text-slate-900">{{ petWalkStats.activitiesCount }}</p>
+          </div>
+          <div class="rounded-lg bg-slate-50 p-3">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Distancia</p>
+            <p class="text-lg font-semibold text-slate-900">{{ petWalkStats.distanceKm.toFixed(2) }} km</p>
+          </div>
+          <div class="rounded-lg bg-slate-50 p-3">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Duracion</p>
+            <p class="text-lg font-semibold text-slate-900">{{ formatDurationMinutes(petWalkStats.durationMinutes) }}</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-left text-slate-500">
+                <th class="px-3 py-2">Fecha</th>
+                <th class="px-3 py-2">Distancia</th>
+                <th class="px-3 py-2">Duracion</th>
+                <th class="px-3 py-2">Recorrido</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="walk in petWalks" :key="walk.id" class="border-b border-slate-100">
+                <td class="px-3 py-2">{{ formatDateTime(walk.startedAt) }}</td>
+                <td class="px-3 py-2">{{ walk.distanceKm.toFixed(2) }} km</td>
+                <td class="px-3 py-2">{{ formatDurationSeconds(walk.durationSeconds) }}</td>
+                <td class="px-3 py-2">
+                  <button
+                    type="button"
+                    class="rounded border border-slate-300 px-2 py-1 text-xs enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="walk.points.length < 2"
+                    @click="selectedPetWalkId = walk.id"
+                  >
+                    Ver mapa
+                  </button>
+                </td>
+              </tr>
+              <tr v-if="petWalks.length === 0">
+                <td colspan="4" class="px-3 py-6 text-center text-slate-500">No hay paseos registrados.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article v-if="selectedPetWalk && selectedPetWalk.points.length > 0" class="space-y-3 rounded-xl border border-slate-200 p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-slate-800">
+            Recorrido - {{ formatDateTime(selectedPetWalk.startedAt) }}
+          </h3>
+          <button
+            type="button"
+            class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+            @click="selectedPetWalkId = ''"
+          >
+            Cerrar
+          </button>
+        </div>
+        <RouteMap :points="selectedPetWalk.points" height-class="h-80" />
+      </article>
+
+      <article class="space-y-3 rounded-xl border border-slate-200 p-4">
         <h3 class="text-sm font-medium text-slate-800">Peso - {{ selectedPet.name }}</h3>
         <form class="grid gap-3 md:grid-cols-3" @submit.prevent="addWeight">
           <div>
@@ -385,7 +555,12 @@
 import { computed, reactive, ref, watch } from "vue";
 import { api } from "../lib/api";
 import { useSessionStore } from "../stores/session";
+import RouteMap from "../components/RouteMap.vue";
 import type {
+  Activity,
+  ActivityPointRequest,
+  ActivityRequest,
+  ActivityWeeklyStats,
   Pet,
   PetCareTask,
   PetCareTaskRequest,
@@ -407,6 +582,16 @@ const editingPetId = ref<string | null>(null);
 const feedings = ref<PetFeeding[]>([]);
 const careTasks = ref<PetCareTask[]>([]);
 const weights = ref<PetWeight[]>([]);
+const petWalks = ref<Activity[]>([]);
+const selectedPetWalkId = ref("");
+const petWalkStats = ref<ActivityWeeklyStats>({
+  weekStart: "",
+  weekEnd: "",
+  activitiesCount: 0,
+  distanceKm: 0,
+  durationMinutes: 0,
+  daily: []
+});
 
 const petTypeOptions = ["DOG", "CAT", "BIRD", "OTHER"];
 const foodUnitOptions = ["G", "KG", "ML", "L", "UD"];
@@ -453,8 +638,35 @@ const weightForm = reactive<PetWeightRequest>({
   recordedAt: null
 });
 
+const petWalkForm = reactive<{
+  startedAt: string;
+  endedAt: string;
+  distanceKm: number | null;
+  notes: string;
+  points: ActivityPointRequest[];
+}>({
+  startedAt: "",
+  endedAt: "",
+  distanceKm: null,
+  notes: "",
+  points: []
+});
+
 const householdId = () => session.activeHouseholdId;
 const selectedPet = computed(() => pets.value.find((pet) => pet.id === selectedPetId.value) ?? null);
+const selectedPetWalk = computed(() => petWalks.value.find((walk) => walk.id === selectedPetWalkId.value) ?? null);
+
+function toLocalInputValue(value: Date) {
+  const offsetMs = value.getTimezoneOffset() * 60 * 1000;
+  const localDate = new Date(value.getTime() - offsetMs);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function toIso(localDateTime: string): string | null {
+  if (!localDateTime) return null;
+  const date = new Date(localDateTime);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
 
 const weightPolyline = computed(() => {
   if (weights.value.length < 2) {
@@ -498,18 +710,29 @@ const loadSelectedPetDetails = async () => {
     feedings.value = [];
     careTasks.value = [];
     weights.value = [];
+    petWalks.value = [];
+    petWalkStats.value = { weekStart: "", weekEnd: "", activitiesCount: 0, distanceKm: 0, durationMinutes: 0, daily: [] };
+    selectedPetWalkId.value = "";
     return;
   }
 
-  const [feedingResponse, careResponse, weightsResponse] = await Promise.all([
+  const [feedingResponse, careResponse, weightsResponse, walksResponse, walkStatsResponse] = await Promise.all([
     api.get<PetFeeding[]>(`/api/households/${id}/pets/${petId}/feedings`),
     api.get<PetCareTask[]>(`/api/households/${id}/pets/${petId}/care-tasks`),
-    api.get<PetWeight[]>(`/api/households/${id}/pets/${petId}/weights`)
+    api.get<PetWeight[]>(`/api/households/${id}/pets/${petId}/weights`),
+    api.get<Activity[]>(`/api/households/${id}/activities`, { params: { petId, type: "PET_WALK" } }),
+    api.get<ActivityWeeklyStats>(`/api/households/${id}/activities/stats/weekly`, { params: { petId, type: "PET_WALK" } })
   ]);
 
   feedings.value = feedingResponse.data;
   careTasks.value = careResponse.data;
   weights.value = weightsResponse.data;
+  petWalks.value = walksResponse.data;
+  petWalkStats.value = walkStatsResponse.data;
+
+  if (!petWalks.value.some((walk) => walk.id === selectedPetWalkId.value)) {
+    selectedPetWalkId.value = "";
+  }
 };
 
 const resetPetForm = () => {
@@ -672,6 +895,68 @@ const addWeight = async () => {
   }
 };
 
+const addPetWalkPoint = () => {
+  petWalkForm.points.push({
+    latitude: 0,
+    longitude: 0,
+    recordedAt: null
+  });
+};
+
+const removePetWalkPoint = (index: number) => {
+  petWalkForm.points.splice(index, 1);
+};
+
+const resetPetWalkForm = () => {
+  const now = new Date();
+  petWalkForm.startedAt = toLocalInputValue(now);
+  petWalkForm.endedAt = toLocalInputValue(new Date(now.getTime() + 30 * 60 * 1000));
+  petWalkForm.distanceKm = null;
+  petWalkForm.notes = "";
+  petWalkForm.points = [];
+};
+
+const createPetWalk = async () => {
+  const id = householdId();
+  const petId = selectedPetId.value;
+  if (!id || !petId) return;
+
+  errorMessage.value = "";
+  const startedAt = toIso(petWalkForm.startedAt);
+  const endedAt = toIso(petWalkForm.endedAt);
+  if (!startedAt || !endedAt) {
+    errorMessage.value = "Debes indicar inicio y fin validos.";
+    return;
+  }
+
+  const payload: ActivityRequest = {
+    type: "PET_WALK",
+    performedByUserId: null,
+    petId,
+    startedAt,
+    endedAt,
+    distanceKm: petWalkForm.distanceKm,
+    gpsTracked: petWalkForm.points.length > 0,
+    title: null,
+    notes: petWalkForm.notes.trim() ? petWalkForm.notes.trim() : null,
+    points: petWalkForm.points
+      .filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
+      .map((point) => ({
+        latitude: point.latitude,
+        longitude: point.longitude,
+        recordedAt: null
+      }))
+  };
+
+  try {
+    await api.post(`/api/households/${id}/activities`, payload);
+    resetPetWalkForm();
+    await loadSelectedPetDetails();
+  } catch {
+    errorMessage.value = "No se pudo registrar el paseo.";
+  }
+};
+
 const careLabel = (careType: PetCareType) => {
   if (careType === "VACCINATION") return "Vacunacion";
   if (careType === "GROOMING") return "Peluqueria";
@@ -690,10 +975,22 @@ const formatDate = (value: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 };
 
+const formatDurationSeconds = (seconds: number) => formatDurationMinutes(Math.round(seconds / 60));
+
+const formatDurationMinutes = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  if (hours <= 0) {
+    return `${remaining} min`;
+  }
+  return `${hours} h ${remaining} min`;
+};
+
 watch(
   () => session.activeHouseholdId,
   () => {
     resetPetForm();
+    resetPetWalkForm();
     errorMessage.value = "";
     void (async () => {
       await loadPets();
@@ -712,6 +1009,7 @@ watch(
     void loadSelectedPetDetails();
     feedingForm.foodType = selectedPet.value?.foodName ?? "";
     feedingForm.unit = selectedPet.value?.foodUnit ?? "G";
+    resetPetWalkForm();
   }
 );
 </script>
