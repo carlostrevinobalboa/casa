@@ -324,3 +324,42 @@ export interface ActivityWeeklyStats {
   durationMinutes: number;
   daily: ActivityDailyStat[];
 }
+
+export type CalendarEventType = "WORK" | "TRAINING" | "TASK" | "PERSONAL" | "OTHER";
+export type CalendarRecurrenceFrequency = "NONE" | "DAILY" | "WEEKLY" | "MONTHLY";
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string;
+  occurrenceStartAt: string;
+  occurrenceEndAt: string;
+  type: CalendarEventType;
+  colorHex: string | null;
+  allDay: boolean;
+  recurrenceFrequency: CalendarRecurrenceFrequency;
+  recurrenceInterval: number;
+  recurrenceCount: number | null;
+  recurrenceUntil: string | null;
+  reminderMinutesBefore: number | null;
+  createdByUserId: string;
+  assignedToUserId: string | null;
+}
+
+export interface CalendarEventRequest {
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string;
+  type: CalendarEventType;
+  colorHex: string | null;
+  allDay: boolean;
+  recurrenceFrequency: CalendarRecurrenceFrequency;
+  recurrenceInterval: number | null;
+  recurrenceCount: number | null;
+  recurrenceUntil: string | null;
+  reminderMinutesBefore: number | null;
+  assignedToUserId: string | null;
+}
