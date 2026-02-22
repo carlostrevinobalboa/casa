@@ -363,3 +363,9 @@ export interface CalendarEventRequest {
   reminderMinutesBefore: number | null;
   assignedToUserId: string | null;
 }
+
+export interface GoogleCalendarStatus {
+  linked: boolean;
+  calendarId: string | null;
+  calendarName: string;
+}

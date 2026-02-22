@@ -17,9 +17,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.casa.api.dto.calendar.CalendarEventRequest;
 import com.casa.api.dto.calendar.CalendarEventResponse;
+import com.casa.api.dto.integrations.GoogleCalendarStatusResponse;
 import com.casa.domain.calendar.CalendarEventType;
 import com.casa.security.AppUserPrincipal;
 import com.casa.service.CalendarService;
+import com.casa.service.GoogleCalendarService;
 import jakarta.validation.Valid;
 
 @Validated
@@ -28,9 +30,11 @@ import jakarta.validation.Valid;
 public class CalendarController {
 
     private final CalendarService calendarService;
+    private final GoogleCalendarService googleCalendarService;
 
-    public CalendarController(CalendarService calendarService) {
+    public CalendarController(CalendarService calendarService, GoogleCalendarService googleCalendarService) {
         this.calendarService = calendarService;
+        this.googleCalendarService = googleCalendarService;
     }
 
     @GetMapping
@@ -71,6 +75,19 @@ public class CalendarController {
         @PathVariable UUID eventId
     ) {
         calendarService.deleteEvent(currentUserId(authentication), householdId, eventId);
+    }
+
+    @GetMapping("/google/status")
+    public GoogleCalendarStatusResponse googleStatus(Authentication authentication, @PathVariable UUID householdId) {
+        UUID userId = currentUserId(authentication);
+        boolean linked = googleCalendarService.findLink(userId).isPresent();
+        String calendarId = linked ? googleCalendarService.ensureCalendar(userId) : null;
+        return new GoogleCalendarStatusResponse(linked, calendarId, "casaChiquitos");
+    }
+
+    @PostMapping("/google/sync")
+    public void googleSync(Authentication authentication, @PathVariable UUID householdId) {
+        calendarService.syncFromGoogle(currentUserId(authentication), householdId);
     }
 
     private UUID currentUserId(Authentication authentication) {

@@ -13,7 +13,13 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import java.util.Map;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -26,16 +32,19 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+    private final ClientRegistrationRepository clientRegistrationRepository;
 
     @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
 
     public SecurityConfig(
         JwtAuthenticationFilter jwtAuthenticationFilter,
-        OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler
+        OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler,
+        ClientRegistrationRepository clientRegistrationRepository
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.oAuth2AuthenticationSuccessHandler = oAuth2AuthenticationSuccessHandler;
+        this.clientRegistrationRepository = clientRegistrationRepository;
     }
 
     @Bean
@@ -60,6 +69,9 @@ public class SecurityConfig {
                 exception.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
             .oauth2Login(oauth2 -> oauth2
+                .authorizationEndpoint(authorization -> authorization
+                    .authorizationRequestResolver(authorizationRequestResolver())
+                )
                 .successHandler(oAuth2AuthenticationSuccessHandler)
                 .failureHandler((request, response, exception) ->
                     response.sendRedirect(frontendUrl + "/login?oauthError=google_auth_failed")
@@ -70,6 +82,45 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    private OAuth2AuthorizationRequestResolver authorizationRequestResolver() {
+        DefaultOAuth2AuthorizationRequestResolver resolver =
+            new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
+        return new OAuth2AuthorizationRequestResolver() {
+            @Override
+            public OAuth2AuthorizationRequest resolve(HttpServletRequest request) {
+                return customize(resolver.resolve(request), request);
+            }
+
+            @Override
+            public OAuth2AuthorizationRequest resolve(HttpServletRequest request, String clientRegistrationId) {
+                return customize(resolver.resolve(request, clientRegistrationId), request);
+            }
+
+            private OAuth2AuthorizationRequest customize(
+                OAuth2AuthorizationRequest authRequest,
+                HttpServletRequest request
+            ) {
+                if (authRequest == null) {
+                    return null;
+                }
+
+                boolean calendarFlow = "1".equals(request.getParameter("calendar"));
+                if (!calendarFlow) {
+                    return authRequest;
+                }
+
+                Map<String, Object> additional = new java.util.HashMap<>(authRequest.getAdditionalParameters());
+                additional.put("access_type", "offline");
+                additional.put("prompt", "consent");
+                additional.put("include_granted_scopes", "true");
+
+                return OAuth2AuthorizationRequest.from(authRequest)
+                    .additionalParameters(additional)
+                    .build();
+            }
+        };
     }
 
     @Bean

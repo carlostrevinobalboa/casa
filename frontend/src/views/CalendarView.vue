@@ -28,7 +28,7 @@
 
     <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ errorMessage }}</p>
 
-    <article class="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-4">
+    <article class="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-5">
       <div class="flex gap-2">
         <button
           type="button"
@@ -77,6 +77,32 @@
       >
         Recargar
       </button>
+
+      <div class="md:col-span-5 flex flex-wrap items-center justify-between gap-2">
+        <div class="text-xs text-slate-500">
+          Google Calendar:
+          <span :class="googleStatus.linked ? 'text-emerald-600' : 'text-slate-500'">
+            {{ googleStatus.linked ? "Conectado" : "Sin conectar" }}
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a
+            v-if="!googleStatus.linked"
+            class="inline-flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-xs hover:bg-slate-50"
+            :href="googleAuthUrl"
+          >
+            Conectar Google Calendar
+          </a>
+          <button
+            v-else
+            type="button"
+            class="inline-flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-xs hover:bg-slate-50"
+            @click="syncFromGoogle"
+          >
+            Sincronizar desde Google
+          </button>
+        </div>
+      </div>
     </article>
 
     <div class="grid gap-4 lg:grid-cols-[2fr_1fr]">
@@ -284,10 +310,17 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { api } from "../lib/api";
+import { api, apiBaseUrl } from "../lib/api";
 import { useSessionStore } from "../stores/session";
 import SearchableSelect from "../components/SearchableSelect.vue";
-import type { CalendarEvent, CalendarEventRequest, CalendarEventType, CalendarRecurrenceFrequency, HouseholdMember } from "../types";
+import type {
+  CalendarEvent,
+  CalendarEventRequest,
+  CalendarEventType,
+  CalendarRecurrenceFrequency,
+  GoogleCalendarStatus,
+  HouseholdMember
+} from "../types";
 
 const session = useSessionStore();
 const errorMessage = ref("");
@@ -301,6 +334,11 @@ const events = ref<CalendarEvent[]>([]);
 const selectedUserFilter = ref<string | "all">("all");
 const selectedTypeFilter = ref<CalendarEventType | "all">("all");
 const editingEventId = ref<string | null>(null);
+const googleStatus = ref<GoogleCalendarStatus>({
+  linked: false,
+  calendarId: null,
+  calendarName: "casaChiquitos"
+});
 
 const weekDays = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
 const calendarTypeOptions = [
@@ -357,6 +395,7 @@ const typeOptions = computed(() => [
 ]);
 
 const householdId = () => session.activeHouseholdId;
+const googleAuthUrl = computed(() => `${apiBaseUrl}/oauth2/authorization/google?calendar=1`);
 
 const monthDays = computed(() => {
   const start = startOfWeek(startOfMonth(cursorDate.value));
@@ -416,6 +455,28 @@ const loadEvents = async () => {
   } catch {
     errorMessage.value = "No se pudieron cargar los eventos.";
   }
+};
+
+const loadGoogleStatus = async () => {
+  const id = householdId();
+  if (!id) {
+    googleStatus.value = { linked: false, calendarId: null, calendarName: "casaChiquitos" };
+    return;
+  }
+
+  try {
+    const { data } = await api.get<GoogleCalendarStatus>(`/api/households/${id}/calendar/events/google/status`);
+    googleStatus.value = data;
+  } catch {
+    googleStatus.value = { linked: false, calendarId: null, calendarName: "casaChiquitos" };
+  }
+};
+
+const syncFromGoogle = async () => {
+  const id = householdId();
+  if (!id) return;
+  await api.post(`/api/households/${id}/calendar/events/google/sync`);
+  await loadEvents();
 };
 
 const saveEvent = async () => {
@@ -612,6 +673,7 @@ watch(
   () => {
     resetForm();
     void loadMembers();
+    void loadGoogleStatus();
     void loadEvents();
   },
   { immediate: true }

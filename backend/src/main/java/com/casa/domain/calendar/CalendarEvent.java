@@ -64,6 +64,9 @@ public class CalendarEvent {
 
     private UUID assignedToUserId;
 
+    @Column(length = 200)
+    private String googleEventId;
+
     @Column(nullable = false)
     private OffsetDateTime createdAt;
 
@@ -196,6 +199,14 @@ public class CalendarEvent {
 
     public void setAssignedToUserId(UUID assignedToUserId) {
         this.assignedToUserId = assignedToUserId;
+    }
+
+    public String getGoogleEventId() {
+        return googleEventId;
+    }
+
+    public void setGoogleEventId(String googleEventId) {
+        this.googleEventId = googleEventId;
     }
 
     public OffsetDateTime getCreatedAt() {

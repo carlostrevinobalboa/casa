@@ -19,6 +19,7 @@ import com.casa.domain.household.Household;
 import com.casa.repository.CalendarEventRepository;
 import com.casa.repository.HouseholdMemberRepository;
 import com.casa.repository.HouseholdRepository;
+import com.casa.service.GoogleCalendarService.CalendarImportHandler;
 
 @Service
 public class CalendarService {
@@ -27,17 +28,20 @@ public class CalendarService {
     private final HouseholdRepository householdRepository;
     private final HouseholdMemberRepository householdMemberRepository;
     private final HouseholdService householdService;
+    private final GoogleCalendarService googleCalendarService;
 
     public CalendarService(
         CalendarEventRepository calendarEventRepository,
         HouseholdRepository householdRepository,
         HouseholdMemberRepository householdMemberRepository,
-        HouseholdService householdService
+        HouseholdService householdService,
+        GoogleCalendarService googleCalendarService
     ) {
         this.calendarEventRepository = calendarEventRepository;
         this.householdRepository = householdRepository;
         this.householdMemberRepository = householdMemberRepository;
         this.householdService = householdService;
+        this.googleCalendarService = googleCalendarService;
     }
 
     @Transactional(readOnly = true)
@@ -93,6 +97,8 @@ public class CalendarService {
         event.setUpdatedAt(event.getCreatedAt());
 
         calendarEventRepository.save(event);
+
+        syncToGoogle(event);
         return toResponse(event, event.getStartAt(), event.getEndAt());
     }
 
@@ -111,6 +117,8 @@ public class CalendarService {
         event.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         calendarEventRepository.save(event);
 
+        syncToGoogle(event);
+
         return toResponse(event, event.getStartAt(), event.getEndAt());
     }
 
@@ -125,7 +133,34 @@ public class CalendarService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Evento no encontrado");
         }
 
+        syncDeleteToGoogle(event);
         calendarEventRepository.delete(event);
+    }
+
+    @Transactional
+    public void syncFromGoogle(UUID userId, UUID householdId) {
+        householdService.requireMembership(userId, householdId);
+
+        googleCalendarService.refreshFromGoogle(userId, (CalendarImportHandler) googleEvent -> {
+            String googleEventId = getString(googleEvent.get("id"));
+            if (googleEventId == null) {
+                return;
+            }
+
+            CalendarEvent event = calendarEventRepository.findByGoogleEventId(googleEventId)
+                .orElseGet(() -> {
+                    CalendarEvent created = new CalendarEvent();
+                    created.setId(UUID.randomUUID());
+                    created.setHousehold(householdRepository.getReferenceById(householdId));
+                    created.setCreatedByUserId(userId);
+                    created.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+                    return created;
+                });
+
+            applyGoogleEvent(event, googleEvent);
+            event.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+            calendarEventRepository.save(event);
+        });
     }
 
     private void applyEvent(CalendarEvent event, CalendarEventRequest request) {
@@ -154,6 +189,68 @@ public class CalendarService {
         event.setRecurrenceCount(request.recurrenceCount());
         event.setRecurrenceUntil(request.recurrenceUntil());
         event.setReminderMinutesBefore(request.reminderMinutesBefore());
+    }
+
+    private void applyGoogleEvent(CalendarEvent event, java.util.Map<?, ?> googleEvent) {
+        event.setGoogleEventId(getString(googleEvent.get("id")));
+        event.setTitle(getString(googleEvent.get("summary")) == null ? "Evento" : getString(googleEvent.get("summary")));
+        event.setDescription(getString(googleEvent.get("description")));
+        event.setType(CalendarEventType.OTHER);
+        event.setColorHex("#0f172a");
+        boolean allDay = isAllDayEvent(googleEvent);
+        event.setAllDay(allDay);
+        event.setRecurrenceFrequency(CalendarRecurrenceFrequency.NONE);
+        event.setRecurrenceInterval(1);
+        event.setRecurrenceCount(null);
+        event.setRecurrenceUntil(null);
+        event.setReminderMinutesBefore(null);
+
+        Object start = googleEvent.get("start");
+        Object end = googleEvent.get("end");
+
+        OffsetDateTime startAt = parseGoogleDateTime(start);
+        OffsetDateTime endAt = parseGoogleDateTime(end);
+        if (startAt != null) {
+            event.setStartAt(startAt);
+        }
+        if (endAt != null) {
+            event.setEndAt(endAt);
+        }
+    }
+
+    private OffsetDateTime parseGoogleDateTime(Object container) {
+        if (!(container instanceof java.util.Map<?, ?> map)) {
+            return null;
+        }
+        Object dateTime = map.get("dateTime");
+        if (dateTime instanceof String value) {
+            return OffsetDateTime.parse(value);
+        }
+        Object date = map.get("date");
+        if (date instanceof String value) {
+            return OffsetDateTime.parse(value + "T00:00:00Z");
+        }
+        return null;
+    }
+
+    private boolean isAllDayEvent(java.util.Map<?, ?> googleEvent) {
+        Object start = googleEvent.get("start");
+        Object end = googleEvent.get("end");
+        boolean startAllDay = hasDateOnly(start);
+        boolean endAllDay = hasDateOnly(end);
+        return startAllDay || endAllDay;
+    }
+
+    private boolean hasDateOnly(Object container) {
+        if (!(container instanceof java.util.Map<?, ?> map)) {
+            return false;
+        }
+        Object date = map.get("date");
+        return date instanceof String && !((String) date).isBlank();
+    }
+
+    private String getString(Object value) {
+        return value instanceof String str ? str : null;
     }
 
     private List<CalendarEventResponse> expandEvent(CalendarEvent event, OffsetDateTime from, OffsetDateTime to) {
@@ -234,6 +331,22 @@ public class CalendarService {
             event.getCreatedByUserId(),
             event.getAssignedToUserId()
         );
+    }
+
+    private void syncToGoogle(CalendarEvent event) {
+        UUID syncUserId = event.getAssignedToUserId() == null ? event.getCreatedByUserId() : event.getAssignedToUserId();
+        googleCalendarService.findLink(syncUserId).ifPresent(link -> {
+            String googleEventId = googleCalendarService.upsertEvent(syncUserId, event);
+            if (googleEventId != null && !googleEventId.equals(event.getGoogleEventId())) {
+                event.setGoogleEventId(googleEventId);
+                calendarEventRepository.save(event);
+            }
+        });
+    }
+
+    private void syncDeleteToGoogle(CalendarEvent event) {
+        UUID syncUserId = event.getAssignedToUserId() == null ? event.getCreatedByUserId() : event.getAssignedToUserId();
+        googleCalendarService.findLink(syncUserId).ifPresent(link -> googleCalendarService.deleteEvent(syncUserId, event));
     }
 
     private String cleanNullable(String value) {
