@@ -3,7 +3,7 @@
     <div>
       <h2 class="text-xl font-semibold">Actividades deportivas</h2>
       <p class="mt-1 text-sm text-slate-600">
-        Historico con filtro por usuario, registro de recorridos y estadisticas semanales.
+        Historico con filtro por usuario, seguimiento GPS en vivo y estadisticas semanales.
       </p>
     </div>
 
@@ -53,6 +53,90 @@
     </article>
 
     <article class="space-y-3 rounded-xl border border-slate-200 p-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-medium text-slate-800">GPS en vivo</h3>
+        <p class="text-xs text-slate-500" v-if="!supportsGeolocation">Este navegador no soporta geolocalizacion.</p>
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-4">
+        <div>
+          <label for="tracking-mode" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+            Modo
+          </label>
+          <select
+            id="tracking-mode"
+            v-model="trackingMode"
+            :disabled="trackingInProgress"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="RUN">Correr</option>
+            <option value="WALK">Caminar</option>
+            <option value="BIKE">Bici</option>
+            <option value="PET_WALK">Paseo mascota</option>
+          </select>
+        </div>
+
+        <div v-if="trackingMode === 'PET_WALK'">
+          <label for="tracking-pet" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
+            Mascota
+          </label>
+          <select
+            id="tracking-pet"
+            v-model="trackingPetId"
+            :disabled="trackingInProgress"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="">Selecciona mascota</option>
+            <option v-for="pet in pets" :key="pet.id" :value="pet.id">{{ pet.name }}</option>
+          </select>
+        </div>
+
+        <div class="rounded-lg bg-slate-50 px-3 py-2">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Tiempo</p>
+          <p class="text-sm font-semibold text-slate-900">{{ formatDurationSeconds(trackingElapsedSeconds) }}</p>
+        </div>
+
+        <div class="rounded-lg bg-slate-50 px-3 py-2">
+          <p class="text-xs uppercase tracking-wide text-slate-500">Distancia</p>
+          <p class="text-sm font-semibold text-slate-900">{{ trackingDistanceKm.toFixed(3) }} km</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!supportsGeolocation || trackingInProgress"
+          @click="startTracking"
+        >
+          Iniciar GPS
+        </button>
+        <button
+          type="button"
+          class="rounded-lg border border-emerald-300 px-3 py-2 text-sm text-emerald-700 enabled:hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!trackingInProgress"
+          @click="stopTrackingAndSave"
+        >
+          Detener y guardar
+        </button>
+        <button
+          type="button"
+          class="rounded-lg border border-slate-300 px-3 py-2 text-sm enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="!trackingInProgress"
+          @click="cancelTracking"
+        >
+          Cancelar
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-500">
+        {{ trackingStatus }}
+      </p>
+
+      <RouteMap v-if="trackingPoints.length > 0" :points="trackingPoints" height-class="h-72" />
+    </article>
+
+    <article class="space-y-3 rounded-xl border border-slate-200 p-4">
       <h3 class="text-sm font-medium text-slate-800">Resumen semanal</h3>
       <div class="grid gap-3 md:grid-cols-3">
         <div class="rounded-lg bg-slate-50 p-3">
@@ -91,7 +175,7 @@
     </article>
 
     <article class="space-y-3 rounded-xl border border-slate-200 p-4">
-      <h3 class="text-sm font-medium text-slate-800">Registrar actividad</h3>
+      <h3 class="text-sm font-medium text-slate-800">Registrar actividad manual</h3>
       <form class="grid gap-3 md:grid-cols-3" @submit.prevent="createActivity">
         <div>
           <label for="activity-type" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600">
@@ -238,11 +322,7 @@
             </button>
           </div>
 
-          <div v-if="activityForm.points.length > 1" class="rounded-lg border border-slate-200 p-2">
-            <svg viewBox="0 0 300 100" class="h-28 w-full">
-              <polyline fill="none" stroke="#0f172a" stroke-width="2" :points="formRoutePolyline"></polyline>
-            </svg>
-          </div>
+          <RouteMap v-if="activityForm.points.length > 0" :points="activityForm.points" height-class="h-60" />
         </div>
 
         <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700">
@@ -275,10 +355,14 @@
               <td class="px-3 py-2">{{ activity.distanceKm.toFixed(2) }} km</td>
               <td class="px-3 py-2">{{ formatDurationSeconds(activity.durationSeconds) }}</td>
               <td class="px-3 py-2">
-                <svg v-if="activity.points.length > 1" viewBox="0 0 80 28" class="h-7 w-24">
-                  <polyline fill="none" stroke="#0f172a" stroke-width="1.5" :points="routePolyline(activity.points, 80, 28)"></polyline>
-                </svg>
-                <span v-else class="text-xs text-slate-400">Sin GPS</span>
+                <button
+                  type="button"
+                  class="rounded border border-slate-300 px-2 py-1 text-xs enabled:hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="activity.points.length < 2"
+                  @click="selectedActivityId = activity.id"
+                >
+                  Ver mapa
+                </button>
               </td>
             </tr>
             <tr v-if="activities.length === 0">
@@ -288,16 +372,32 @@
         </table>
       </div>
     </article>
+
+    <article v-if="selectedActivity && selectedActivity.points.length > 0" class="space-y-3 rounded-xl border border-slate-200 p-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-medium text-slate-800">
+          Recorrido: {{ activityTypeLabel(selectedActivity.type) }} - {{ formatDateTime(selectedActivity.startedAt) }}
+        </h3>
+        <button
+          type="button"
+          class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50"
+          @click="selectedActivityId = ''"
+        >
+          Cerrar
+        </button>
+      </div>
+      <RouteMap :points="selectedActivity.points" height-class="h-80" />
+    </article>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import RouteMap from "../components/RouteMap.vue";
 import { api } from "../lib/api";
 import { useSessionStore } from "../stores/session";
 import type {
   Activity,
-  ActivityPoint,
   ActivityPointRequest,
   ActivityRequest,
   ActivityType,
@@ -328,6 +428,7 @@ const errorMessage = ref("");
 
 const selectedUserFilter = ref<string | "all">(session.activityUserFilter ?? "all");
 const activityTypeFilter = ref<ActivityType | "all">("all");
+const selectedActivityId = ref("");
 
 const stats = ref<ActivityWeeklyStats>({
   weekStart: "",
@@ -366,9 +467,20 @@ const activityForm = reactive<ActivityFormState>({
   points: []
 });
 
-const householdId = () => session.activeHouseholdId;
+const supportsGeolocation = typeof navigator !== "undefined" && "geolocation" in navigator;
+const trackingMode = ref<ActivityType>("WALK");
+const trackingPetId = ref("");
+const trackingInProgress = ref(false);
+const trackingPoints = ref<ActivityPointRequest[]>([]);
+const trackingStartedAt = ref<Date | null>(null);
+const trackingElapsedSeconds = ref(0);
+const trackingStatus = ref("Listo para iniciar seguimiento GPS.");
+let trackingWatchId: number | null = null;
+let trackingTimer: ReturnType<typeof setInterval> | null = null;
 
-const formRoutePolyline = computed(() => routePolyline(activityForm.points, 300, 100));
+const householdId = () => session.activeHouseholdId;
+const selectedActivity = computed(() => activities.value.find((activity) => activity.id === selectedActivityId.value) ?? null);
+const trackingDistanceKm = computed(() => roundDistanceKm(calculateDistanceKm(trackingPoints.value)));
 
 const loadMembers = async () => {
   const id = householdId();
@@ -379,6 +491,10 @@ const loadMembers = async () => {
 
   const { data } = await api.get<HouseholdMember[]>(`/api/households/${id}/members`);
   members.value = data;
+
+  if (selectedUserFilter.value !== "all" && !members.value.some((member) => member.userId === selectedUserFilter.value)) {
+    selectedUserFilter.value = "all";
+  }
 };
 
 const loadPets = async () => {
@@ -396,6 +512,7 @@ const loadActivities = async () => {
   const id = householdId();
   if (!id) {
     activities.value = [];
+    selectedActivityId.value = "";
     return;
   }
 
@@ -409,6 +526,10 @@ const loadActivities = async () => {
 
   const { data } = await api.get<Activity[]>(`/api/households/${id}/activities`, { params });
   activities.value = data;
+
+  if (!activities.value.some((activity) => activity.id === selectedActivityId.value)) {
+    selectedActivityId.value = "";
+  }
 };
 
 const loadStats = async () => {
@@ -468,6 +589,18 @@ const resetForm = () => {
   activityForm.points = [];
 };
 
+const cleanNullable = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const submitActivity = async (payload: ActivityRequest) => {
+  const id = householdId();
+  if (!id) return;
+  await api.post(`/api/households/${id}/activities`, payload);
+  await Promise.all([loadActivities(), loadStats()]);
+};
+
 const createActivity = async () => {
   const id = householdId();
   if (!id) return;
@@ -505,12 +638,146 @@ const createActivity = async () => {
   };
 
   try {
-    await api.post(`/api/households/${id}/activities`, payload);
+    await submitActivity(payload);
     resetForm();
-    await Promise.all([loadActivities(), loadStats()]);
   } catch {
     errorMessage.value = "No se pudo guardar la actividad.";
   }
+};
+
+const clearTrackingWatcher = () => {
+  if (trackingWatchId != null && supportsGeolocation) {
+    navigator.geolocation.clearWatch(trackingWatchId);
+    trackingWatchId = null;
+  }
+  if (trackingTimer) {
+    clearInterval(trackingTimer);
+    trackingTimer = null;
+  }
+};
+
+const appendTrackingPoint = (latitude: number, longitude: number, recordedAt: Date) => {
+  const last = trackingPoints.value[trackingPoints.value.length - 1];
+  if (last) {
+    const distanceMeters = haversineMeters(last.latitude, last.longitude, latitude, longitude);
+    if (distanceMeters < 2) {
+      return;
+    }
+  }
+
+  trackingPoints.value.push({
+    latitude,
+    longitude,
+    recordedAt: recordedAt.toISOString()
+  });
+};
+
+const startTracking = () => {
+  errorMessage.value = "";
+  if (!supportsGeolocation) {
+    errorMessage.value = "Tu navegador no soporta geolocalizacion.";
+    return;
+  }
+  if (trackingInProgress.value) {
+    return;
+  }
+  if (trackingMode.value === "PET_WALK" && !trackingPetId.value) {
+    errorMessage.value = "Selecciona mascota para iniciar el paseo GPS.";
+    return;
+  }
+
+  trackingPoints.value = [];
+  trackingStartedAt.value = new Date();
+  trackingElapsedSeconds.value = 0;
+  trackingInProgress.value = true;
+  trackingStatus.value = "Solicitando posicion GPS...";
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      appendTrackingPoint(position.coords.latitude, position.coords.longitude, new Date(position.timestamp));
+      trackingStatus.value = "GPS activo. Registrando recorrido.";
+    },
+    () => {
+      trackingStatus.value = "Esperando primera posicion...";
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+  );
+
+  trackingWatchId = navigator.geolocation.watchPosition(
+    (position) => {
+      appendTrackingPoint(position.coords.latitude, position.coords.longitude, new Date(position.timestamp));
+      trackingStatus.value = "GPS activo. Registrando recorrido.";
+    },
+    (error) => {
+      trackingStatus.value = `GPS error: ${error.message}`;
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+
+  trackingTimer = setInterval(() => {
+    if (!trackingStartedAt.value) {
+      trackingElapsedSeconds.value = 0;
+      return;
+    }
+    trackingElapsedSeconds.value = Math.max(0, Math.floor((Date.now() - trackingStartedAt.value.getTime()) / 1000));
+  }, 1000);
+};
+
+const stopTrackingAndSave = async () => {
+  if (!trackingInProgress.value || !trackingStartedAt.value) {
+    return;
+  }
+
+  clearTrackingWatcher();
+  trackingInProgress.value = false;
+
+  if (trackingPoints.value.length < 2) {
+    errorMessage.value = "No hay suficientes puntos GPS para guardar la actividad.";
+    trackingStatus.value = "Seguimiento detenido sin guardar.";
+    trackingPoints.value = [];
+    return;
+  }
+
+  const startedAt = trackingStartedAt.value.toISOString();
+  const endedAt = new Date().toISOString();
+
+  const payload: ActivityRequest = {
+    type: trackingMode.value,
+    performedByUserId: null,
+    petId: trackingMode.value === "PET_WALK" ? trackingPetId.value || null : null,
+    startedAt,
+    endedAt,
+    distanceKm: trackingDistanceKm.value,
+    gpsTracked: true,
+    title: null,
+    notes: null,
+    points: trackingPoints.value.map((point) => ({
+      latitude: point.latitude,
+      longitude: point.longitude,
+      recordedAt: point.recordedAt ?? null
+    }))
+  };
+
+  try {
+    await submitActivity(payload);
+    trackingStatus.value = "Actividad GPS guardada correctamente.";
+  } catch {
+    errorMessage.value = "No se pudo guardar la actividad GPS.";
+    trackingStatus.value = "Seguimiento detenido con error al guardar.";
+  } finally {
+    trackingPoints.value = [];
+    trackingStartedAt.value = null;
+    trackingElapsedSeconds.value = 0;
+  }
+};
+
+const cancelTracking = () => {
+  clearTrackingWatcher();
+  trackingInProgress.value = false;
+  trackingPoints.value = [];
+  trackingStartedAt.value = null;
+  trackingElapsedSeconds.value = 0;
+  trackingStatus.value = "Seguimiento cancelado.";
 };
 
 const activityTypeLabel = (type: ActivityType) => {
@@ -526,34 +793,6 @@ const memberName = (userId: string) =>
 const petName = (petId: string | null) => {
   if (!petId) return "-";
   return pets.value.find((pet) => pet.id === petId)?.name ?? "Mascota";
-};
-
-const routePolyline = (points: Array<ActivityPoint | ActivityPointRequest>, width: number, height: number) => {
-  if (!points || points.length < 2) {
-    return "";
-  }
-
-  const latitudes = points.map((point) => point.latitude);
-  const longitudes = points.map((point) => point.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const latSpan = maxLat - minLat || 1;
-  const lngSpan = maxLng - minLng || 1;
-
-  return points
-    .map((point) => {
-      const x = ((point.longitude - minLng) / lngSpan) * (width - 4) + 2;
-      const y = height - (((point.latitude - minLat) / latSpan) * (height - 4) + 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-};
-
-const cleanNullable = (value: string) => {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
 };
 
 const formatDate = (value: string) => {
@@ -577,12 +816,41 @@ const formatDurationMinutes = (minutes: number) => {
   return `${hours} h ${remaining} min`;
 };
 
+const haversineMeters = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const earthRadius = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2)
+    + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180)
+    * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+};
+
+const calculateDistanceKm = (points: ActivityPointRequest[]): number => {
+  if (points.length < 2) {
+    return 0;
+  }
+  let totalMeters = 0;
+  for (let i = 1; i < points.length; i++) {
+    const previous = points[i - 1];
+    const current = points[i];
+    totalMeters += haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude);
+  }
+  return totalMeters / 1000;
+};
+
+const roundDistanceKm = (distanceKm: number) => Math.round(distanceKm * 1000) / 1000;
+
 watch(
   () => session.activeHouseholdId,
   () => {
     selectedUserFilter.value = session.activityUserFilter ?? "all";
     activityTypeFilter.value = "all";
+    selectedActivityId.value = "";
     resetForm();
+    cancelTracking();
     void reloadAll();
   },
   { immediate: true }
@@ -611,4 +879,17 @@ watch(
     }
   }
 );
+
+watch(
+  () => trackingMode.value,
+  (newType) => {
+    if (newType !== "PET_WALK") {
+      trackingPetId.value = "";
+    }
+  }
+);
+
+onBeforeUnmount(() => {
+  clearTrackingWatcher();
+});
 </script>
