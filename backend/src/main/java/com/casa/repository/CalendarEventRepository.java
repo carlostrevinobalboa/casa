@@ -10,4 +10,5 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, UU
     List<CalendarEvent> findByHouseholdIdOrderByStartAtAsc(UUID householdId);
     List<CalendarEvent> findByHouseholdIdAndCreatedByUserIdOrderByStartAtAsc(UUID householdId, UUID createdByUserId);
     Optional<CalendarEvent> findByGoogleEventId(String googleEventId);
+    Optional<CalendarEvent> findByGoogleEventIdAndGoogleCalendarId(String googleEventId, String googleCalendarId);
 }

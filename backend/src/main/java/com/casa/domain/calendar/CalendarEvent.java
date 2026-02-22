@@ -67,6 +67,9 @@ public class CalendarEvent {
     @Column(length = 200)
     private String googleEventId;
 
+    @Column(length = 200)
+    private String googleCalendarId;
+
     @Column(nullable = false)
     private OffsetDateTime createdAt;
 
@@ -207,6 +210,14 @@ public class CalendarEvent {
 
     public void setGoogleEventId(String googleEventId) {
         this.googleEventId = googleEventId;
+    }
+
+    public String getGoogleCalendarId() {
+        return googleCalendarId;
+    }
+
+    public void setGoogleCalendarId(String googleCalendarId) {
+        this.googleCalendarId = googleCalendarId;
     }
 
     public OffsetDateTime getCreatedAt() {

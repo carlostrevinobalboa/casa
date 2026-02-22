@@ -19,6 +19,7 @@ import com.casa.domain.household.Household;
 import com.casa.repository.CalendarEventRepository;
 import com.casa.repository.HouseholdMemberRepository;
 import com.casa.repository.HouseholdRepository;
+import com.casa.service.GoogleCalendarService.GoogleCalendarSyncResult;
 import com.casa.service.GoogleCalendarService.CalendarImportHandler;
 
 @Service
@@ -141,13 +142,19 @@ public class CalendarService {
     public void syncFromGoogle(UUID userId, UUID householdId) {
         householdService.requireMembership(userId, householdId);
 
-        googleCalendarService.refreshFromGoogle(userId, (CalendarImportHandler) googleEvent -> {
+        googleCalendarService.refreshFromGoogle(userId, (CalendarImportHandler) (calendarId, googleEvent) -> {
+            if (calendarId == null || calendarId.isBlank()) {
+                return;
+            }
             String googleEventId = getString(googleEvent.get("id"));
             if (googleEventId == null) {
                 return;
             }
 
-            CalendarEvent event = calendarEventRepository.findByGoogleEventId(googleEventId)
+            CalendarEvent event = calendarEventRepository.findByGoogleEventIdAndGoogleCalendarId(
+                googleEventId,
+                calendarId
+            )
                 .orElseGet(() -> {
                     CalendarEvent created = new CalendarEvent();
                     created.setId(UUID.randomUUID());
@@ -157,6 +164,7 @@ public class CalendarService {
                     return created;
                 });
 
+            event.setGoogleCalendarId(calendarId);
             applyGoogleEvent(event, googleEvent);
             event.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
             calendarEventRepository.save(event);
@@ -336,9 +344,20 @@ public class CalendarService {
     private void syncToGoogle(CalendarEvent event) {
         UUID syncUserId = event.getAssignedToUserId() == null ? event.getCreatedByUserId() : event.getAssignedToUserId();
         googleCalendarService.findLink(syncUserId).ifPresent(link -> {
-            String googleEventId = googleCalendarService.upsertEvent(syncUserId, event);
-            if (googleEventId != null && !googleEventId.equals(event.getGoogleEventId())) {
-                event.setGoogleEventId(googleEventId);
+            GoogleCalendarSyncResult syncResult = googleCalendarService.upsertEvent(syncUserId, event);
+            if (syncResult == null || syncResult.eventId() == null) {
+                return;
+            }
+            boolean shouldSave = false;
+            if (!syncResult.eventId().equals(event.getGoogleEventId())) {
+                event.setGoogleEventId(syncResult.eventId());
+                shouldSave = true;
+            }
+            if (syncResult.calendarId() != null && !syncResult.calendarId().equals(event.getGoogleCalendarId())) {
+                event.setGoogleCalendarId(syncResult.calendarId());
+                shouldSave = true;
+            }
+            if (shouldSave) {
                 calendarEventRepository.save(event);
             }
         });

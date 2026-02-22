@@ -3,8 +3,11 @@ package com.casa.service;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +22,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriUtils;
 import com.casa.domain.calendar.CalendarEvent;
 import com.casa.domain.calendar.CalendarRecurrenceFrequency;
 import com.casa.domain.integrations.GoogleCalendarLink;
@@ -33,6 +37,7 @@ public class GoogleCalendarService {
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
     private static final DateTimeFormatter RRULE_UNTIL_FORMATTER =
         DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
+    private static final List<String> WRITABLE_ROLES = List.of("owner", "writer");
 
     private final GoogleCalendarLinkRepository googleCalendarLinkRepository;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -128,16 +133,16 @@ public class GoogleCalendarService {
     }
 
     @Transactional
-    public String upsertEvent(UUID userId, CalendarEvent event) {
+    public GoogleCalendarSyncResult upsertEvent(UUID userId, CalendarEvent event) {
         GoogleCalendarLink link = googleCalendarLinkRepository.findByUserId(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Google Calendar no conectado"));
 
-        String calendarId = ensureCalendar(userId);
+        String calendarId = resolveCalendarId(userId, event);
         String token = ensureAccessToken(link);
         HttpHeaders headers = bearerHeaders(token);
 
         Map<String, Object> payload = mapEvent(event);
-        String url = GOOGLE_CALENDAR_BASE + "/calendars/" + calendarId + "/events";
+        String url = GOOGLE_CALENDAR_BASE + "/calendars/" + encodeCalendarId(calendarId) + "/events";
 
         if (event.getGoogleEventId() == null || event.getGoogleEventId().isBlank()) {
             ResponseEntity<Map> created = restTemplate.postForEntity(
@@ -145,14 +150,15 @@ public class GoogleCalendarService {
                 new HttpEntity<>(payload, headers),
                 Map.class
             );
-            return created.getBody() == null ? null : (String) created.getBody().get("id");
+            String eventId = created.getBody() == null ? null : (String) created.getBody().get("id");
+            return new GoogleCalendarSyncResult(eventId, calendarId);
         }
 
         restTemplate.put(
             url + "/" + event.getGoogleEventId(),
             new HttpEntity<>(payload, headers)
         );
-        return event.getGoogleEventId();
+        return new GoogleCalendarSyncResult(event.getGoogleEventId(), calendarId);
     }
 
     @Transactional
@@ -164,12 +170,12 @@ public class GoogleCalendarService {
         GoogleCalendarLink link = googleCalendarLinkRepository.findByUserId(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Google Calendar no conectado"));
 
-        String calendarId = ensureCalendar(userId);
+        String calendarId = resolveCalendarId(userId, event);
         String token = ensureAccessToken(link);
         HttpHeaders headers = bearerHeaders(token);
 
         restTemplate.exchange(
-            GOOGLE_CALENDAR_BASE + "/calendars/" + calendarId + "/events/" + event.getGoogleEventId(),
+            GOOGLE_CALENDAR_BASE + "/calendars/" + encodeCalendarId(calendarId) + "/events/" + event.getGoogleEventId(),
             org.springframework.http.HttpMethod.DELETE,
             new HttpEntity<>(headers),
             Void.class
@@ -181,24 +187,28 @@ public class GoogleCalendarService {
         GoogleCalendarLink link = googleCalendarLinkRepository.findByUserId(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Google Calendar no conectado"));
 
-        String calendarId = ensureCalendar(userId);
+        String casaCalendarId = ensureCalendar(userId);
         String token = ensureAccessToken(link);
         HttpHeaders headers = bearerHeaders(token);
 
-        String url = GOOGLE_CALENDAR_BASE + "/calendars/" + calendarId + "/events?singleEvents=true&orderBy=startTime";
+        List<GoogleCalendarSource> calendars = listWritableCalendars(headers, casaCalendarId);
+        for (GoogleCalendarSource calendar : calendars) {
+            String url = GOOGLE_CALENDAR_BASE + "/calendars/" + encodeCalendarId(calendar.id())
+                + "/events?singleEvents=true&orderBy=startTime";
 
-        ResponseEntity<Map> response = restTemplate.exchange(
-            url,
-            org.springframework.http.HttpMethod.GET,
-            new HttpEntity<>(headers),
-            Map.class
-        );
+            ResponseEntity<Map> response = restTemplate.exchange(
+                url,
+                org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(headers),
+                Map.class
+            );
 
-        Object items = response.getBody() == null ? null : response.getBody().get("items");
-        if (items instanceof List<?> list) {
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> map) {
-                    handler.handleGoogleEvent(map);
+            Object items = response.getBody() == null ? null : response.getBody().get("items");
+            if (items instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> map) {
+                        handler.handleGoogleEvent(calendar.id(), map);
+                    }
                 }
             }
         }
@@ -238,6 +248,66 @@ public class GoogleCalendarService {
         link.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         googleCalendarLinkRepository.save(link);
         return accessToken;
+    }
+
+    private String resolveCalendarId(UUID userId, CalendarEvent event) {
+        if (event.getGoogleCalendarId() != null && !event.getGoogleCalendarId().isBlank()) {
+            return event.getGoogleCalendarId();
+        }
+        return ensureCalendar(userId);
+    }
+
+    private List<GoogleCalendarSource> listWritableCalendars(HttpHeaders headers, String casaCalendarId) {
+        ResponseEntity<Map> response = restTemplate.exchange(
+            GOOGLE_CALENDAR_BASE + "/users/me/calendarList",
+            org.springframework.http.HttpMethod.GET,
+            new HttpEntity<>(headers),
+            Map.class
+        );
+
+        List<GoogleCalendarSource> calendars = new ArrayList<>();
+        Object items = response.getBody() == null ? null : response.getBody().get("items");
+        if (items instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    String id = getString(map.get("id"));
+                    if (id == null) {
+                        continue;
+                    }
+                    String accessRole = getString(map.get("accessRole"));
+                    if (!isWritable(accessRole)) {
+                        continue;
+                    }
+                    String summary = getString(map.get("summary"));
+                    boolean primary = Boolean.TRUE.equals(map.get("primary"));
+                    boolean selected = Boolean.TRUE.equals(map.get("selected"));
+                    calendars.add(new GoogleCalendarSource(id, summary, primary, selected, accessRole));
+                }
+            }
+        }
+
+        boolean hasCasa = calendars.stream().anyMatch(calendar -> calendar.id().equals(casaCalendarId));
+        if (!hasCasa && casaCalendarId != null && !casaCalendarId.isBlank()) {
+            calendars.add(new GoogleCalendarSource(casaCalendarId, CALENDAR_NAME, false, true, "owner"));
+        }
+
+        return calendars;
+    }
+
+    private boolean isWritable(String accessRole) {
+        if (accessRole == null) {
+            return false;
+        }
+        String normalized = accessRole.toLowerCase(Locale.ROOT);
+        return WRITABLE_ROLES.contains(normalized);
+    }
+
+    private String encodeCalendarId(String calendarId) {
+        return UriUtils.encodePathSegment(calendarId, StandardCharsets.UTF_8);
+    }
+
+    private String getString(Object value) {
+        return value instanceof String str ? str : null;
     }
 
     private HttpHeaders bearerHeaders(String token) {
@@ -296,6 +366,16 @@ public class GoogleCalendarService {
     }
 
     public interface CalendarImportHandler {
-        void handleGoogleEvent(Map<?, ?> googleEvent);
+        void handleGoogleEvent(String calendarId, Map<?, ?> googleEvent);
     }
+
+    public record GoogleCalendarSyncResult(String eventId, String calendarId) {}
+
+    private record GoogleCalendarSource(
+        String id,
+        String summary,
+        boolean primary,
+        boolean selected,
+        String accessRole
+    ) {}
 }
