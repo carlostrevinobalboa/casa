@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.casa.api.dto.household.HouseholdMemberResponse;
 import com.casa.domain.household.Household;
 import com.casa.domain.household.HouseholdMember;
 import com.casa.domain.household.HouseholdRole;
@@ -93,6 +94,21 @@ public class HouseholdService {
     @Transactional(readOnly = true)
     public List<HouseholdMember> listMemberships(UUID userId) {
         return householdMemberRepository.findByUserIdOrderByCreatedAtAsc(userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<HouseholdMemberResponse> listMembers(UUID userId, UUID householdId) {
+        requireMembership(userId, householdId);
+
+        return householdMemberRepository.findByHouseholdId(householdId)
+            .stream()
+            .map(member -> new HouseholdMemberResponse(
+                member.getUser().getId(),
+                member.getUser().getDisplayName(),
+                member.getRole(),
+                member.getColorHex()
+            ))
+            .toList();
     }
 
     @Transactional(readOnly = true)

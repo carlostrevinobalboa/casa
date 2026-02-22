@@ -12,6 +12,13 @@ export interface HouseholdSummary {
   colorHex: string;
 }
 
+export interface HouseholdMember {
+  userId: string;
+  displayName: string;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  colorHex: string;
+}
+
 export interface AuthResponse {
   accessToken: string;
   tokenType: string;
@@ -256,4 +263,64 @@ export interface PetCareTaskRequest {
   notifyDaysBefore: number;
   lastPerformedAt: string | null;
   active: boolean;
+}
+
+export type ActivityType = "RUN" | "WALK" | "BIKE" | "PET_WALK";
+
+export interface ActivityPoint {
+  id: string;
+  sequenceNumber: number;
+  latitude: number;
+  longitude: number;
+  recordedAt: string;
+}
+
+export interface ActivityPointRequest {
+  latitude: number;
+  longitude: number;
+  recordedAt: string | null;
+}
+
+export interface Activity {
+  id: string;
+  type: ActivityType;
+  performedByUserId: string;
+  petId: string | null;
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  distanceKm: number;
+  title: string | null;
+  notes: string | null;
+  gpsTracked: boolean;
+  points: ActivityPoint[];
+}
+
+export interface ActivityRequest {
+  type: ActivityType;
+  performedByUserId: string | null;
+  petId: string | null;
+  startedAt: string;
+  endedAt: string;
+  distanceKm: number | null;
+  gpsTracked: boolean;
+  title: string | null;
+  notes: string | null;
+  points: ActivityPointRequest[];
+}
+
+export interface ActivityDailyStat {
+  day: string;
+  activitiesCount: number;
+  distanceKm: number;
+  durationMinutes: number;
+}
+
+export interface ActivityWeeklyStats {
+  weekStart: string;
+  weekEnd: string;
+  activitiesCount: number;
+  distanceKm: number;
+  durationMinutes: number;
+  daily: ActivityDailyStat[];
 }
